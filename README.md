@@ -14,7 +14,6 @@ specification.
 More advanced features include:
 - Specifying the gate library. (E.g. including or excluding
   AND/OR/NOT/MAJ gates).
-- Support for wire crossings.
 - Toggling I/O pins.
 - Toggling border I/O.
 
