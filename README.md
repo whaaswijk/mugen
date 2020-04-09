@@ -18,15 +18,39 @@ More advanced features include:
 - Toggling border I/O.
 
 # Dependencies
+
+## Numpy/Anaconda
+Mugen depends on [Numpy](https://numpy.org/), and therefore the
+easiest way of using Mugen is by installing a scientific Python
+distribution first (see
+[here](https://www.scipy.org/install.html)). The recommended
+distribution is [Anaconda](https://www.anaconda.com). Anaconda
+will automatically pull in the Numpy as well. 
+
 ## PySAT
-Mugen depends on [PySAT](https://github.com/pysathq/pysat). The
-easiest way to install PySAT is to simply use pip:
+
+Mugen uses [PySAT](https://github.com/pysathq/pysat) as a SAT
+backend. PySAT depends on a **C/C++** compiler as well as the **zlib**
+libraries, so just install whatever versions of those work best for
+your development environment. The easiest way to install PySAT istself
+is to simply use pip:
+
 ```sh
 pip install python-sat
 ```
+
 ## Graphviz (Optional)
+
 This dependency is only required if you want to visualize clocking scheme graphs or logic networks. Installing
 the Python package for Graphviz can be done by running:
 ```sh
 pip install graphviz
+```
+
+The Python interface to Graphviz depends on the **dot** executable
+being on your system's path. Install this using the preferred method
+for your system. For instance, on a Debian system one might use:
+
+```sh
+sudo apt install graphviz
 ```
