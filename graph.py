@@ -193,9 +193,10 @@ class scheme_graph:
         'WIRE': 1
     }
 
-    def __init__(self, *, shape=(1,1), nr_pis=1, nr_pos=1, border_io=False,
-                 enable_not=True, enable_and=True, enable_or=True,
-                 enable_maj=True, enable_crossings=False):
+    def __init__(self, *, shape=(1,1), nr_pis=1, nr_pos=1,
+                 border_io=False, enable_wire=True, enable_not=True,
+                 enable_and=True, enable_or=True, enable_maj=True,
+                 enable_crossings=False, designated_io=False):
         '''
         Creates a new clocking scheme graph according to specifications.
         Defines the following properties.
@@ -204,11 +205,13 @@ class scheme_graph:
         nr_pis: Number of PIs.
         nr_pos: Number of POs.
         border_io: True iff only border nodes can have PI fanin.
+        enable_not: Enable synthesis of WIREs.
         enable_not: Enable synthesis of NOT gates.
         enable_and: Enable synthesis of AND gates.
         enable_or: Enable synthesis of OR gates.
         enable_maj: Enable synthesis of MAJ gates.
         enable_crossings: Enable wire crossings.
+        border_io: True iff only WIRES can have PI/PO fanin/fanout.
         '''
         self.shape = shape
         self.nr_pis = nr_pis
@@ -224,6 +227,8 @@ class scheme_graph:
                 self.nodes.append(n)
                 self.node_map[(x,y)] = n
 
+        self.enable_wire = enable_wire
+        self.designated_io = designated_io
         self.border_io = border_io
         self.enable_not = enable_not
         self.enable_and = enable_and
@@ -244,24 +249,6 @@ class scheme_graph:
         node2 = self.node_map[coords2]
         node1.virtual_fanout.append(node2)
         node2.virtual_fanin.append(node1)
-
-    def designate_pi(self, coords):
-        '''
-        Designates the node at the given tile coordinates as an PI
-        pin. It will be hardcoded to act as a wire element which is
-        connected to a PI.
-        '''
-        n = self.node_map[coords]
-        n.is_designated_pi = True
-
-    def designate_po(self, coords):
-        '''
-        Designates the node at the given tile coordinates as a PO
-        pint. It will be hardcoded to act as a wire element which
-        connected to a PO.
-        '''
-        n = self.node_map[coords]
-        n.is_designated_po = True
 
     def to_png(self, filename):
         '''
@@ -314,7 +301,9 @@ class scheme_graph:
         lut_vars = {}
         var_idx = 1
 
-        enabled_gates = ['WIRE']
+        enabled_gates = []
+        if self.enable_wire:
+            enabled_gates.append('WIRE')
         if self.enable_not:
             enabled_gates.append('NOT')
         if self.enable_and:
@@ -323,7 +312,7 @@ class scheme_graph:
             enabled_gates.append('OR')
         if self.enable_maj:
             enabled_gates.append('MAJ')
-        assert(len(enabled_gates) > 1)
+        assert(len(enabled_gates) > 0)
         nr_gate_types = len(enabled_gates)
         if verbosity > 0:
             print('enabled_gates={}'.format(enabled_gates))
@@ -613,8 +602,8 @@ class scheme_graph:
                             fanout_vars.append(svar_map[np][k][i])
             if verbosity > 1:
                 print('fanout_vars {}: {}'.format(n.coords, fanout_vars))
-            # Create cardinality constraints based on gate type.  The
-            # first gate type var is always a WIRE.
+            # Create cardinality constraints based on gate type.
+            '''
             ngatetypevars = gate_type_vars[n]
             wire_var = ngatetypevars[0]
             cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise, bound=3)
@@ -624,8 +613,19 @@ class scheme_graph:
                 cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise)
                 for clause in cnf.clauses:
                     clauses.append([-gt_var] + clause)
+            '''
+            for i in range(len(enabled_gates)):
+                bound = 1
+                if enabled_gates[i] == 'WIRE':
+                    bound = 3
+                gt_var = ngatetypevars[i]
+                cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise, bound=bound)
+                for clause in cnf.clauses:
+                    clauses.append([-gt_var] + clause)
+                
 
-        # Create clauses to fix designated I/O pins
+        # TODO: implement designated I/O
+        '''
         for n in self.nodes:
             if n.is_designated_pi or n.is_designated_po:
                 # The first gate type var always refers to WIRE and n
@@ -640,7 +640,8 @@ class scheme_graph:
                     houtvar = houtvars[(x,y)]
                     outpointers.append(houtvar)
                 clauses.append(outpointers)
-                
+        '''
+        
         nr_clauses = len(clauses)
         if verbosity > 0:
             print('nr clauses: {}'.format(nr_clauses))

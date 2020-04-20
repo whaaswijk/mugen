@@ -170,6 +170,39 @@ class synth_tests(unittest.TestCase):
             break
         self.assertEqual(models_found, 1)
 
+    def test_disable_wire(self):
+        '''
+        Build a circuit that computes a MUX function without using
+        majority gates or WIRE elements. Using a 3x3 USE topology.
+        '''
+        g = scheme_graph(shape=(3,3), nr_pis=3)
+        g.enable_maj = False
+        g.enable_wire = False
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((2, 2), (2, 1))
+        functions = [[0,0,1,1,0,1,0,1]]
+        models_found = 0
+        for net in g.synthesize(functions): #, verbosity=2):
+            models_found += 1
+            for n in net.nodes:
+                self.assertFalse(n.gate_type in ['WIRE', 'MAJ'])
+            if models_found >= 10:
+                break
+#            print(net)
+#            net.to_png('mux-test')
+#            input()
+        self.assertTrue(models_found > 0)
+
     def test_border_io(self):
         '''
         Build a circuit that computes a MUX function without
@@ -200,89 +233,6 @@ class synth_tests(unittest.TestCase):
                 self.assertTrue(False)
             if models_found > 10000:
                 net.to_png('border-io-test')
-                break
-        self.assertTrue(models_found > 0)
-
-    def test_designated_pi(self):
-        '''
-        Tests designated specific tiles as PI pins, meaning
-        that they should be synthesized as wires pointing
-        to PIs.
-        '''
-        # As always, start by constructing the clocking scheme graph.
-        g = scheme_graph(shape=(3,3), nr_pis=3)
-        # Use border I/O.
-        g.border_io = True
-        g.add_virtual_edge((0, 0), (1, 0))
-        g.add_virtual_edge((1, 0), (2, 0))
-        g.add_virtual_edge((1, 0), (1, 1))
-        g.add_virtual_edge((0, 1), (0, 0))
-        g.add_virtual_edge((1, 1), (0, 1))
-        g.add_virtual_edge((1, 1), (1, 2))
-        g.add_virtual_edge((2, 1), (2, 0))
-        g.add_virtual_edge((2, 1), (1, 1))
-        g.add_virtual_edge((0, 2), (0, 1))
-        g.add_virtual_edge((0, 2), (1, 2))
-        g.add_virtual_edge((1, 2), (2, 2))
-        g.add_virtual_edge((2, 2), (2, 1))
-        # Synthesize a MUX
-        functions = [[0,0,1,1,0,1,0,1]]
-        # Designate tile (0,0) and (2,2) (top-left and bottom-right
-        # corners, respectively) as PI pins.
-        g.designate_pi((0,0))
-        g.designate_pi((2,2))
-        
-        models_found = 0
-        for net in g.synthesize(functions):
-            # that the designated tiles have indeed been synthesized
-            # as PI-connected wires.
-            self.assertTrue(net.node_map[(0,0)].gate_type == 'WIRE')
-            self.assertTrue(net.node_map[(2,2)].gate_type == 'WIRE')
-            self.assertTrue(net.node_map[(0,0)].fanin[0].is_pi)
-            self.assertTrue(net.node_map[(2,2)].fanin[0].is_pi)
-            models_found += 1
-            if models_found > 10000:
-                net.to_png('designated-pi-test')
-                break
-
-    def test_designated_po(self):
-        '''
-        Tests designated specific tiles as PO pins, meaning
-        that they should be synthesized as wires pointing
-        to gates which compute the correct functions.
-        '''
-        # As always, start by constructing the clocking scheme graph.
-        g = scheme_graph(shape=(3,3), nr_pis=3)
-        # Use border I/O.
-        g.border_io = True
-        g.add_virtual_edge((0, 0), (1, 0))
-        g.add_virtual_edge((1, 0), (2, 0))
-        g.add_virtual_edge((1, 0), (1, 1))
-        g.add_virtual_edge((0, 1), (0, 0))
-        g.add_virtual_edge((1, 1), (0, 1))
-        g.add_virtual_edge((1, 1), (1, 2))
-        g.add_virtual_edge((2, 1), (2, 0))
-        g.add_virtual_edge((2, 1), (1, 1))
-        g.add_virtual_edge((0, 2), (0, 1))
-        g.add_virtual_edge((0, 2), (1, 2))
-        g.add_virtual_edge((1, 2), (2, 2))
-        g.add_virtual_edge((2, 2), (2, 1))
-        # Synthesize a MUX and a MAJ gate
-        functions = [[0,0,1,1,0,1,0,1], [0,0,0,1,0,1,1,1]]
-        # Designate tile (0,0) and (2,2) (top-left and bottom-right
-        # corners, respectively) as PI pins.
-        g.designate_po((2,0))
-        g.designate_po((1,2))
-        
-        models_found = 0
-        for net in g.synthesize(functions):
-            # that the designated tiles have indeed been synthesized
-            # as PI-connected wires.
-            self.assertTrue(net.node_map[(2,0)].gate_type == 'WIRE')
-            self.assertTrue(net.node_map[(1,2)].gate_type == 'WIRE')
-            models_found += 1
-            if models_found > 10000:
-                net.to_png('designated-po-test')
                 break
         self.assertTrue(models_found > 0)
 
