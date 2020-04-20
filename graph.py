@@ -31,6 +31,9 @@ class node:
             return 'PI{}'.format(self.coords)
         else:
             return '<node {}>'.format(self.coords)
+        
+    def __lt__(self, other): 
+        return self.coords < other.coords
 
 class logic_network:
     '''
