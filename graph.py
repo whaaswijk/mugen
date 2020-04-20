@@ -22,8 +22,6 @@ class node:
         self.is_border_node = False
         self.is_po = is_po
         self.fanin = {}
-        self.is_designated_pi = False
-        self.is_designated_po = False
         self.gate_type = None
 
     def __repr__(self):
@@ -109,7 +107,7 @@ class logic_network:
     def has_border_io(self):
         '''
         Checks if only border nodes are connected to PIs and POs. Returns
-        True of this is the case and False otherwise.
+        True if this is the case and False otherwise.
         '''
         for n in self.nodes:
             if n.is_pi:
@@ -123,6 +121,29 @@ class logic_network:
                 return False
         return True
 
+    def has_designated_pi(self):
+        '''
+        Checks if only WIREs are connected to PIs. Returns True of this is
+        the case and False otherwise.
+        '''
+        for n in self.nodes:
+            if n.is_pi or n.gate_type == 'WIRE':
+                continue
+            for innode in n.fanin.values():
+                if innode.is_pi:
+                    return False
+        return True
+
+    def has_designated_po(self):
+        '''
+        Checks if only WIREs are connected to POs. Returns True of this is
+        the case and False otherwise.
+        '''
+        for n in self.po_map:
+            if n.gate_type != 'WIRE':
+                return False
+        return True
+    
     def to_png(self, filename):
         '''
         Creates a PNG of the logic network using Graphviz.
@@ -196,7 +217,8 @@ class scheme_graph:
     def __init__(self, *, shape=(1,1), nr_pis=1, nr_pos=1,
                  border_io=False, enable_wire=True, enable_not=True,
                  enable_and=True, enable_or=True, enable_maj=True,
-                 enable_crossings=False, designated_io=False):
+                 enable_crossings=False, designated_pi=False,
+                 designated_po=False):
         '''
         Creates a new clocking scheme graph according to specifications.
         Defines the following properties.
@@ -211,7 +233,8 @@ class scheme_graph:
         enable_or: Enable synthesis of OR gates.
         enable_maj: Enable synthesis of MAJ gates.
         enable_crossings: Enable wire crossings.
-        border_io: True iff only WIRES can have PI/PO fanin/fanout.
+        designated_pi: True iff only WIRES can have PI fanin.
+        designated_po: True iff only WIRES can have PO fanout.
         '''
         self.shape = shape
         self.nr_pis = nr_pis
@@ -228,13 +251,14 @@ class scheme_graph:
                 self.node_map[(x,y)] = n
 
         self.enable_wire = enable_wire
-        self.designated_io = designated_io
         self.border_io = border_io
         self.enable_not = enable_not
         self.enable_and = enable_and
         self.enable_or = enable_or
         self.enable_maj = enable_maj
         self.enable_crossings = enable_crossings
+        self.designated_pi = designated_pi
+        self.designated_po = designated_po
     
     def add_virtual_edge(self, coords1, coords2):
         '''
@@ -366,9 +390,7 @@ class scheme_graph:
             fanin_options[n] = {}
             svar_map[n] = {}
             for k in range(3):
-                if n.is_designated_pi:
-                    fanin_options[n][k] = pi_fanin_options
-                elif (self.border_io and n.is_border_node) or not self.border_io:
+                if (self.border_io and n.is_border_node) or not self.border_io:
                     fanin_options[n][k] = pi_fanin_options + n.virtual_fanin
                 else:
                     fanin_options[n][k] = n.virtual_fanin
@@ -624,7 +646,42 @@ class scheme_graph:
                     clauses.append([-gt_var] + clause)
                 
 
-        # TODO: implement designated I/O
+        # If designated_io is enabled only WIRE elements can have
+        # PI/PO fanin/fanout.
+        if self.designated_pi:
+            assert(self.enable_wire)
+            for n in self.nodes:
+                if n.is_pi:
+                    continue
+                if self.border_io and not n.is_border_node:
+                    continue
+                ngatetypevars = gate_type_vars[n]
+                # If enabled, WIRE is the first gate type variable.
+                wire_type_var = ngatetypevars[0]
+                for k in range(3):
+                    options = fanin_options[n][k]
+                    for i in range(len(options)):
+                        innode = options[i]
+                        if innode.is_pi:
+                            pi_lit = -svar_map[n][k][i]
+                            clauses.append([pi_lit, wire_type_var])
+
+        if self.designated_po:
+            assert(self.enable_wire)
+            for n in self.nodes:
+                if n.is_pi:
+                    continue
+                if self.border_io and not n.is_border_node:
+                    continue
+                ngatetypevars = gate_type_vars[n]
+                # If enabled, WIRE is the first gate type variable.
+                wire_type_var = ngatetypevars[0]
+                # If one of the POs points to this gate, it has to be
+                # a WIRE.
+                for h in range(nr_outputs):
+                    houtvars = out_vars[h]
+                    houtvar = houtvars[n.coords]
+                    clauses.append([-houtvar, wire_type_var])
         '''
         for n in self.nodes:
             if n.is_designated_pi or n.is_designated_po:
