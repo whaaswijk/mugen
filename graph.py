@@ -214,9 +214,9 @@ class scheme_graph:
         'WIRE': 1
     }
 
-    def __init__(self, *, shape=(1,1), nr_pis=1, nr_pos=1,
-                 border_io=False, enable_wire=True, enable_not=True,
-                 enable_and=True, enable_or=True, enable_maj=True,
+    def __init__(self, *, shape=(1,1), border_io=False,
+                 enable_wire=True, enable_not=True, enable_and=True,
+                 enable_or=True, enable_maj=True,
                  enable_crossings=False, designated_pi=False,
                  designated_po=False):
         '''
@@ -224,8 +224,6 @@ class scheme_graph:
         Defines the following properties.
 
         shape: A 2-tuple specifying the dimensions of the clocking scheme.
-        nr_pis: Number of PIs.
-        nr_pos: Number of POs.
         border_io: True iff only border nodes can have PI fanin.
         enable_not: Enable synthesis of WIREs.
         enable_not: Enable synthesis of NOT gates.
@@ -237,17 +235,12 @@ class scheme_graph:
         designated_po: True iff only WIRES can have PO fanout.
         '''
         self.shape = shape
-        self.nr_pis = nr_pis
-        self.nr_pos = nr_pos
-        
-        self.nodes = [node(coords=i,is_pi=True) for i in range(nr_pis)] 
         self.node_map = {}
         for y in range(shape[1]):
             for x in range(shape[0]):
                 n = node(coords=(x, y))
                 if x == 0 or x == (shape[0] - 1) or y == 0 or y == (shape[1] - 1):
                     n.is_border_node = True
-                self.nodes.append(n)
                 self.node_map[(x,y)] = n
 
         self.enable_wire = enable_wire
@@ -318,7 +311,14 @@ class scheme_graph:
         '''
         assert(len(functions) > 0)
         assert(len(functions[0]) % 2 == 0)
-        assert(round(log2(len(functions[0]))) == self.nr_pis)
+
+        self.nr_pis = round(log2(len(functions[0])))
+        self.nr_pos = len(functions)
+        
+        self.nodes = [node(coords=i,is_pi=True) for i in range(self.nr_pis)] 
+        for y in range(self.shape[1]):
+            for x in range(self.shape[0]):
+                self.nodes.append(self.node_map[(x,y)])
 
         sim_vars = {}
         input_sim_vars = {}
