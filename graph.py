@@ -625,17 +625,6 @@ class scheme_graph:
             if verbosity > 1:
                 print('fanout_vars {}: {}'.format(n.coords, fanout_vars))
             # Create cardinality constraints based on gate type.
-            '''
-            ngatetypevars = gate_type_vars[n]
-            wire_var = ngatetypevars[0]
-            cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise, bound=3)
-            for clause in cnf.clauses:
-                clauses.append([-wire_var] + clause)
-            for gt_var in ngatetypevars[1:]:
-                cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise)
-                for clause in cnf.clauses:
-                    clauses.append([-gt_var] + clause)
-            '''
             for i in range(len(enabled_gates)):
                 bound = 1
                 if enabled_gates[i] == 'WIRE':
@@ -682,22 +671,6 @@ class scheme_graph:
                     houtvars = out_vars[h]
                     houtvar = houtvars[n.coords]
                     clauses.append([-houtvar, wire_type_var])
-        '''
-        for n in self.nodes:
-            if n.is_designated_pi or n.is_designated_po:
-                # The first gate type var always refers to WIRE and n
-                # must be a WIRE element.
-                ngatetypevars = gate_type_vars[n]
-                clauses.append([ngatetypevars[0]])
-            if n.is_designated_po:
-                # At least one of the outputs must point to n.
-                outpointers = []
-                for h in range(nr_outputs):
-                    houtvars = out_vars[h]
-                    houtvar = houtvars[(x,y)]
-                    outpointers.append(houtvar)
-                clauses.append(outpointers)
-        '''
         
         nr_clauses = len(clauses)
         if verbosity > 0:
