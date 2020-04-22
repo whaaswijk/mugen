@@ -39,8 +39,7 @@ class synth_tests(unittest.TestCase):
         '''
         # Create a very simple graph for a 1x1 grid with 2 PIs.
         # Disable all gate types except for and. Try to synthesize an
-        # AND function and count the number of solutions. There should
-        # be exactly 4 due to the various fanin combinations.
+        # AND function and count the number of solutions.
         g = scheme_graph(shape=(1,1))
         g.enable_or = False
         g.enable_not = False
@@ -235,40 +234,52 @@ class synth_tests(unittest.TestCase):
 
     def test_designated_pi(self):
         '''
-        Builds a circuit that computes a 3-input AND function without using
-        majority gates and while enabling "designated_pi". Using a 3x3
-        USE topology.  Verifies that only WIRE elements have PI fanin.
+        Builds a circuit that computes a 3-input MUX without using
+        majority gates and while enabling "designated_pi". Using a 5x3
+        USE topology. Verifies that only WIRE elements have PI fanin.
         '''
-        g = scheme_graph(shape=(3,3))
+        g = scheme_graph(shape=(5,3))
         g.enable_maj = False
         g.designated_pi = True
         g.add_virtual_edge((0, 0), (1, 0))
         g.add_virtual_edge((1, 0), (2, 0))
         g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((2, 0), (3, 0))
+        g.add_virtual_edge((3, 0), (3, 1))
         g.add_virtual_edge((0, 1), (0, 0))
         g.add_virtual_edge((1, 1), (0, 1))
         g.add_virtual_edge((1, 1), (1, 2))
         g.add_virtual_edge((2, 1), (2, 0))
         g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((3, 1), (2, 1))
+        g.add_virtual_edge((3, 1), (3, 2))
         g.add_virtual_edge((0, 2), (0, 1))
         g.add_virtual_edge((0, 2), (1, 2))
         g.add_virtual_edge((1, 2), (2, 2))
         g.add_virtual_edge((2, 2), (2, 1))
-        functions = [[0,0,0,0,0,0,0,1]]
+        g.add_virtual_edge((2, 2), (3, 2))
+
+        g.add_virtual_edge((3, 0), (4, 0))
+        g.add_virtual_edge((4, 1), (4, 0))
+        g.add_virtual_edge((4, 1), (3, 1))
+        g.add_virtual_edge((4, 2), (4, 1))
+        g.add_virtual_edge((3, 2), (4, 2))
+        
+        functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
-        for net in g.synthesize(functions): #, verbosity=2):
+        for net in g.synthesize(functions):
             models_found += 1
             self.assertTrue(net.has_designated_pi())
-            if models_found > 10000:
-#                net.to_png('designated-pi-test')
+            if models_found > 1000:
                 break
         self.assertTrue(models_found > 0)
 
     def test_designated_po(self):
         '''
-        Builds a circuit that computes a 3-input AND function without using
+        Builds a circuit that computes a 3-input MUX without using
         majority gates and while enabling "designated_po". Using a 3x3
-        USE topology.  Verifies that only WIRE elements have PO fanout.
+        USE topology.  Verifies that only WIRE elements have PO
+        fanout.
         '''
         g = scheme_graph(shape=(3,3))
         g.enable_maj = False
@@ -285,50 +296,58 @@ class synth_tests(unittest.TestCase):
         g.add_virtual_edge((0, 2), (1, 2))
         g.add_virtual_edge((1, 2), (2, 2))
         g.add_virtual_edge((2, 2), (2, 1))
-        functions = [[0,0,0,0,0,0,0,1]]
+        functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
             models_found += 1
             self.assertTrue(net.has_designated_po())
-            if models_found == 1:
-                net.to_png('designated-po-test')
+            if models_found > 1000:
                 break
-        print('found {} models'.format(models_found))
         self.assertTrue(models_found > 0)
-
 
     def test_restricted_io(self):
         '''
-        Builds a circuit that computes a 3-input AND function without
+        Builds a circuit that computes a 3-input MUX without
         using majority gates and while enabling "designated_pi",
-        "designated_po", and "border_io". Using a 3x3 USE topology.
+        "designated_po", and "border_io". Using a 5x3 USE topology.
         Verifies that only WIRE elements on the border have PI/PO
         fanin/fanout.
         '''
-        g = scheme_graph(shape=(3,3))
+        g = scheme_graph(shape=(5,3))
         g.enable_maj = False
         g.designated_pi = True
         g.designated_po = True
         g.border_io = True
+
         g.add_virtual_edge((0, 0), (1, 0))
         g.add_virtual_edge((1, 0), (2, 0))
         g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((2, 0), (3, 0))
+        g.add_virtual_edge((3, 0), (3, 1))
         g.add_virtual_edge((0, 1), (0, 0))
         g.add_virtual_edge((1, 1), (0, 1))
         g.add_virtual_edge((1, 1), (1, 2))
         g.add_virtual_edge((2, 1), (2, 0))
         g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((3, 1), (2, 1))
+        g.add_virtual_edge((3, 1), (3, 2))
         g.add_virtual_edge((0, 2), (0, 1))
         g.add_virtual_edge((0, 2), (1, 2))
         g.add_virtual_edge((1, 2), (2, 2))
         g.add_virtual_edge((2, 2), (2, 1))
-        functions = [[0,0,0,0,0,0,0,1]]
+        g.add_virtual_edge((2, 2), (3, 2))
+        g.add_virtual_edge((3, 0), (4, 0))
+        g.add_virtual_edge((4, 1), (4, 0))
+        g.add_virtual_edge((4, 1), (3, 1))
+        g.add_virtual_edge((4, 2), (4, 1))
+        g.add_virtual_edge((3, 2), (4, 2))
+
+        functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
-        for net in g.synthesize(functions): #, verbosity=2):
+        for net in g.synthesize(functions):
             models_found += 1
-            self.assertTrue(net.has_designated_pi and net.has_designated_po() and net.has_border_io())
-            if models_found == 1:
-                net.to_png('restricted-io-test')
+            self.assertTrue(net.has_designated_pi() and net.has_designated_po() and net.has_border_io())
+            if models_found > 1000:
                 break
         self.assertTrue(models_found > 0)
 

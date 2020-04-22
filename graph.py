@@ -22,7 +22,16 @@ class node:
         self.is_border_node = False
         self.is_po = is_po
         self.fanin = {}
+        self.fanout = []
         self.gate_type = None
+
+    def set_fanin(self, k, innode):
+        '''
+        Sets the k-th fanin of this node to innode and updates the fanout
+        of innode by appending this node to it.
+        '''
+        self.fanin[k] = innode
+        innode.fanout.append(self)
 
     def __repr__(self):
         if self.is_pi:
@@ -34,6 +43,7 @@ class node:
         return self.coords < other.coords
 
 class logic_network:
+
     '''
     A logic_network is the result of synthesis. Its design is similar
     to a clocking scheme graph. A major difference is that it cannot
@@ -123,24 +133,34 @@ class logic_network:
 
     def has_designated_pi(self):
         '''
-        Checks if only WIREs are connected to PIs. Returns True of this is
-        the case and False otherwise.
+        Checks if only WIREs are connected to PIs. Moreover, verifies that
+        those designated PI WIREs have only one fanout. Returns True
+        of this is the case and False otherwise.
         '''
         for n in self.nodes:
-            if n.is_pi or n.gate_type == 'WIRE':
+            if n.is_pi:
                 continue
-            for innode in n.fanin.values():
-                if innode.is_pi:
-                    return False
+            if n.gate_type != 'WIRE':
+                for innode in n.fanin.values():
+                    if innode.is_pi:
+                        return False
+            else:
+                nr_fanout = len(n.fanout)
+                for innode in n.fanin.values():
+                    if innode.is_pi and nr_fanout > 1:
+                        return False
         return True
 
     def has_designated_po(self):
         '''
-        Checks if only WIREs are connected to POs. Returns True of this is
-        the case and False otherwise.
+        Checks if only WIREs are connected to POs. Moreover, verifies that
+        those designated PO WIREs have no other fanout. Returns True
+        of this is the case and False otherwise.
         '''
         for n in self.po_map:
             if n.gate_type != 'WIRE':
+                return False
+            if len(n.fanout) > 0:
                 return False
         return True
     
@@ -323,6 +343,7 @@ class scheme_graph:
         sim_vars = {}
         input_sim_vars = {}
         lut_vars = {}
+        rev_var_map = {}
         var_idx = 1
 
         enabled_gates = []
@@ -355,6 +376,7 @@ class scheme_graph:
             nsimvars = [0] * nr_sim_vars
             for i in range(nr_sim_vars):
                 nsimvars[i] = var_idx
+                rev_var_map[var_idx] = 'nsimvars[{}][{}] = {}'.format(n.coords, i, var_idx)
                 var_idx += 1
             sim_vars[n] = nsimvars
 
@@ -366,6 +388,7 @@ class scheme_graph:
                 nsimvars = [0] * nr_sim_vars
                 for j in range(nr_sim_vars):
                     nsimvars[j] = var_idx
+                    rev_var_map[var_idx] = 'nsimvars[{}] = {}'.format(j, var_idx)
                     var_idx += 1
                 ninputsimvars[i] = nsimvars
             input_sim_vars[n] = ninputsimvars
@@ -373,6 +396,7 @@ class scheme_graph:
             nlutvars = [0] * nr_lut_vars
             for i in range(nr_lut_vars):
                 nlutvars[i] = var_idx
+                rev_var_map[var_idx] = 'nlutvars[{}] = {}'.format(i, var_idx)
                 var_idx += 1
             lut_vars[n] = nlutvars
 
@@ -397,12 +421,13 @@ class scheme_graph:
                 nr_fanin_options = len(fanin_options[n][k])
                 if verbosity > 0:
                     print('fanin options for {}[{}]: {}'.format(n.coords, k, fanin_options[n][k]))
-                    print('nr fanin options: {}'.format(nr_fanin_options))
                 assert(nr_fanin_options > 0)
                 # Create variables for the 3 potentially used fanin ports
                 svar_map[n][k] = [0] * nr_fanin_options
                 for i in range(nr_fanin_options):
                     svar_map[n][k][i] = var_idx
+                    rev_var_map[var_idx] = 'svar_map[{}][{}][{}] = {} ({})'.format(
+                        n.coords, k, i, fanin_options[n][k][i].coords, var_idx)
                     var_idx += 1
 
         nr_selection_vars = var_idx - 1 - nr_sim_and_lut_vars
@@ -420,6 +445,7 @@ class scheme_graph:
                     if self.border_io and not n.is_border_node:
                         continue
                     houtvars[(x,y)] = var_idx
+                    rev_var_map[var_idx] = 'houtvars[({},{}] = {}'.format(x, y, var_idx)
                     var_idx += 1
             out_vars[h] = houtvars
 
@@ -434,6 +460,7 @@ class scheme_graph:
             ngatetypevars = [0] * nr_gate_types
             for i in range(nr_gate_types):
                 ngatetypevars[i] = var_idx
+                rev_var_map[var_idx] = 'ngatetypevars[{}] = {}'.format(i, var_idx)
                 var_idx += 1
             gate_type_vars[n] = ngatetypevars
 
@@ -451,6 +478,7 @@ class scheme_graph:
                 if np.is_pi:
                     continue
                 path_vars[n][np] = var_idx
+                rev_var_map[var_idx] = 'path_vars[{}][{}] = {}'.format(n, np, var_idx)
                 var_idx += 1
 
         nr_path_vars = var_idx - 1 - nr_sim_and_lut_vars - nr_selection_vars - nr_out_vars - nr_gate_type_vars
@@ -489,14 +517,29 @@ class scheme_graph:
                         clause.append(-lut_vars[n][f_idx])
                     clauses.append(clause)
 
-        # Make sure each node selects some fanin on each of its input ports
+        # Make sure each node selects some fanin on each of its input
+        # ports. Note that the number of fanins it needs to select
+        # depends on its gate type: e.g. AND gates need 2 fanins, MAJ
+        # gates need 3.
         for n in self.nodes:
             if n.is_pi:
                 continue
-            for k in range(3):
-                clauses.append(svar_map[n][k])
+            ngatetypevars = gate_type_vars[n]
+            for i in range(len(enabled_gates)):
+                gate_type_var = ngatetypevars[i]
+                gate_type = enabled_gates[i]
+                fanin_range = self.gate_fanin_range[gate_type]
+                for k in range(fanin_range):
+                    clauses.append([-gate_type_var] + svar_map[n][k])
+            # Make sure that a gate never has more than one fanin from
+            # the same gate.
+            for i in range(len(svar_map[n][0])):
+                i_fanin = [svar_map[n][0][i], svar_map[n][1][i], svar_map[n][2][i]]
+                cnf = CardEnc.atmost(lits=i_fanin, encoding=EncType.pairwise)
+                for clause in cnf.clauses:
+                    clauses.append(clause)            
 
-        # Add fanin selection constraints
+        # Add fanin selection constraints.
         for y in range(self.shape[1]):
             for x in range(self.shape[0]):
                 n = self.node_map[(x,y)]
@@ -505,9 +548,10 @@ class scheme_graph:
                     nr_fanin_options = len(options)
                     for i in range(nr_fanin_options):
                         innode = options[i]
-                        # Suppose fanin k of node n selects option i
-                        # Then, for all tt_idx, input truth table of node n
-                        # at tt_idx must equal truth table of i at tt_idx
+                        # Suppose fanin k of node n selects option i.
+                        # Then, for all tt_idx, input truth table of
+                        # node n at tt_idx must equal truth table of i
+                        # at tt_idx.
                         for tt_idx in range(nr_sim_vars):
                             clause = [0] * 3
                             clause[0] = -svar_map[n][k][i]
@@ -520,7 +564,7 @@ class scheme_graph:
                             clause[2] = -sim_vars[innode][tt_idx]
                             clauses.append(clause)
 
-        # Create cycle-prevention constraints
+        # Create cycle-prevention constraints.
         for n in self.nodes:
             if n.is_pi:
                 continue
@@ -595,6 +639,7 @@ class scheme_graph:
             cnf = CardEnc.equals(lits=ngatetypevars, encoding=EncType.pairwise)
             for clause in cnf.clauses:
                 clauses.append(clause)
+
             for i in range(nr_gate_types):
                 gate_type = enabled_gates[i]
                 gate_tt = self.gate_tts[gate_type]
@@ -612,7 +657,9 @@ class scheme_graph:
         for n in self.nodes:
             if n.is_pi:
                 continue
+            ngatetypevars = gate_type_vars[n]
             fanout_vars = []
+            fanout_nodes = []
             for np in self.nodes:
                 if np.is_pi or np == n:
                     continue
@@ -622,15 +669,18 @@ class scheme_graph:
                     for i in range(nr_fanin_options):
                         if options[i] == n:
                             fanout_vars.append(svar_map[np][k][i])
+                            fanout_nodes.append(np.coords)
             if verbosity > 1:
-                print('fanout_vars {}: {}'.format(n.coords, fanout_vars))
+                print('fanout_vars {}: {}'.format(n.coords, list(zip(fanout_nodes, fanout_vars))))
             # Create cardinality constraints based on gate type.
             for i in range(len(enabled_gates)):
                 bound = 1
-                if enabled_gates[i] == 'WIRE':
-                    bound = 3
+                if enabled_gates[i] == 'WIRE':                    
+                        bound = 3
                 gt_var = ngatetypevars[i]
                 cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise, bound=bound)
+                if verbosity > 1:
+                    print('fanout cardinality clauses: {}'.format([[-gt_var] + clause for clause in cnf.clauses]))
                 for clause in cnf.clauses:
                     clauses.append([-gt_var] + clause)
                 
@@ -644,17 +694,36 @@ class scheme_graph:
                     continue
                 if self.border_io and not n.is_border_node:
                     continue
-                ngatetypevars = gate_type_vars[n]
+                fanout_vars = []
+                fanout_options = []
+                for np in self.nodes:
+                    if np.is_pi or np == n:
+                        continue
+                    for k in range(3):
+                        options = fanin_options[np][k]
+                        nr_fanin_options = len(options)
+                        for i in range(nr_fanin_options):
+                            if options[i] == n:
+                                fanout_vars.append(svar_map[np][k][i])
+                                fanout_options.append(np.coords)
+
                 # If enabled, WIRE is the first gate type variable.
+                ngatetypevars = gate_type_vars[n]
                 wire_type_var = ngatetypevars[0]
                 for k in range(3):
                     options = fanin_options[n][k]
                     for i in range(len(options)):
                         innode = options[i]
                         if innode.is_pi:
-                            pi_lit = -svar_map[n][k][i]
-                            clauses.append([pi_lit, wire_type_var])
-
+                            pi_var = svar_map[n][k][i]
+                            clauses.append([-pi_var, wire_type_var])
+                            # A designated PI can only have single fanout.
+                            cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise)
+                            #print('would add: {}'.format(cnf.clauses))
+                            
+                            for clause in cnf.clauses:
+                                clauses.append([-pi_var] + clause)
+    
         if self.designated_po:
             assert(self.enable_wire)
             for n in self.nodes:
@@ -662,16 +731,28 @@ class scheme_graph:
                     continue
                 if self.border_io and not n.is_border_node:
                     continue
-                ngatetypevars = gate_type_vars[n]
+                fanout_vars = []
+                for np in self.nodes:
+                    if np.is_pi or np == n:
+                        continue
+                    for k in range(3):
+                        options = fanin_options[np][k]
+                        nr_fanin_options = len(options)
+                        for i in range(nr_fanin_options):
+                            if options[i] == n:
+                                fanout_vars.append(svar_map[np][k][i])
                 # If enabled, WIRE is the first gate type variable.
+                ngatetypevars = gate_type_vars[n]
                 wire_type_var = ngatetypevars[0]
                 # If one of the POs points to this gate, it has to be
-                # a WIRE.
+                # a WIRE. Moreover, it cannot have any other fanout.
                 for h in range(nr_outputs):
                     houtvars = out_vars[h]
                     houtvar = houtvars[n.coords]
                     clauses.append([-houtvar, wire_type_var])
-        
+                    for fanout_var in fanout_vars:
+                        clauses.append([-houtvar, -fanout_var])
+                        
         nr_clauses = len(clauses)
         if verbosity > 0:
             print('nr clauses: {}'.format(nr_clauses))
@@ -679,6 +760,7 @@ class scheme_graph:
         solver = Glucose3()
         for clause in clauses:
             solver.add_clause(clause)
+
 
 #        print(clauses)
         for model in solver.enum_models():
@@ -695,7 +777,7 @@ class scheme_graph:
                         print('{}'.format(val), end='')
                     print()
             
-            net = logic_network(self.shape, self.nr_pis, len(functions))
+            net = logic_network(self.shape, self.nr_pis, self.nr_pos)
             for h in range(nr_outputs):
                 houtvars = out_vars[h]
                 out_found = 0
@@ -740,9 +822,13 @@ class scheme_graph:
                         if model_val > 0:
                             innode = options[j]
                             if innode.is_pi:
-                                netnode.fanin[k] = net.nodes[innode.coords]
+#                                netnode.fanin[k] = net.nodes[innode.coords]
+                                netnode.set_fanin(k, net.nodes[innode.coords])
                             else:
-                                netnode.fanin[k] = net.node_map[innode.coords]
+#                                netnode.fanin[k] = net.node_map[innode.coords]
+                                netnode.set_fanin(k, net.node_map[innode.coords])
                             if verbosity > 1:
                                 print('{}[{}] = {} (var {})'.format(n.coords, k, innode.coords, var))
+
             yield net
+
