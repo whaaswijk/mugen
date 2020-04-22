@@ -1,7 +1,7 @@
 # Mugen
 
 Mugen is a Python library for gate-level SAT-based physical synthesis
-for [Field-coupled Nanocomputing
+of [Field-coupled Nanocomputing
 (FCN)](https://www.springer.com/de/book/9783662437216) devices. Its
 design is inspired by Marcel Walter's
 [fiction](https://github.com/marcelwa/fiction) library. In the
