@@ -3,6 +3,7 @@ import itertools
 from math import log2
 from pysat.solvers import Glucose3
 from pysat.card import *
+import sys
 
 class SynthesisException(Exception):
 
@@ -264,14 +265,15 @@ class scheme_graph:
                 self.node_map[(x,y)] = n
 
         self.enable_wire = enable_wire
-        self.border_io = border_io
         self.enable_not = enable_not
         self.enable_and = enable_and
         self.enable_or = enable_or
         self.enable_maj = enable_maj
+        self.border_io = border_io
         self.enable_crossings = enable_crossings
         self.designated_pi = designated_pi
         self.designated_po = designated_po
+        self.model = None
     
     def add_virtual_edge(self, coords1, coords2):
         '''
@@ -286,6 +288,21 @@ class scheme_graph:
         node2 = self.node_map[coords2]
         node1.virtual_fanout.append(node2)
         node2.virtual_fanin.append(node1)
+
+    def dfs_find_cycles(self, cycles, start, n, path):
+        if n in path:
+            if n == start:
+                cycles.append([n] + path)
+            return
+        for innode in n.virtual_fanin:
+            self.dfs_find_cycles(cycles, start, innode, [n] + path)
+
+    def find_cycles(self):
+        cycles = []
+        for n in self.node_map.values():
+            for innode in n.virtual_fanin:
+                self.dfs_find_cycles(cycles, n, innode, [n])
+        return cycles
 
     def to_png(self, filename):
         '''
@@ -319,7 +336,41 @@ class scheme_graph:
 
         dot.render(filename=filename, format='png', cleanup=True)
 
+    def satisfies_spec(self, net):
+        '''
+        Verifies that a network satisfies the specifications represented
+        by this scheme_graph object.
+        '''
+        if not self.enable_wire:
+            for n in net.nodes:
+                if not n.is_pi and n.gate_type == 'WIRE':
+                    return False
+        if not self.enable_not:
+            for n in net.nodes:
+                if not n.is_pi and n.gate_type == 'NOT':
+                    return False
+        if not self.enable_and:
+            for n in net.nodes:
+                if not n.is_pi and n.gate_type == 'AND':
+                    return False
+        if not self.enable_or:
+            for n in net.nodes:
+                if not n.is_pi and n.gate_type == 'OR':
+                    return False
+        if not self.enable_maj:
+            for n in net.nodes:
+                if not n.is_pi and n.gate_type == 'MAJ':
+                    return False
+        if self.border_io and not net.has_border_io():
+            return False
+        if self.designated_pi and not net.has_designated_pi():
+            return False
+        if self.designated_po and not net.has_designated_po():
+            return False
+        return True
+
     def synthesize(self, functions, verbosity=0):
+
         '''
         Synthesizes a logic network according to the clocking scheme
         specifications encoded in the graph and the functional
@@ -467,21 +518,23 @@ class scheme_graph:
             print('Created {} gate-type vars'.format(nr_gate_type_vars))
 
         # Create graph connection and path variables
-        path_vars = {}
+        cycles = self.find_cycles()
+        connection_vars = {}
         for n in self.nodes:
             if n.is_pi:
                 continue
-            path_vars[n] = {}
-            for np in self.nodes:
-                if np.is_pi:
-                    continue
-                path_vars[n][np] = var_idx
-                rev_var_map[var_idx] = 'path_vars[{}][{}] = {}'.format(n, np, var_idx)
+            connection_vars[n] = {}
+        for n in self.nodes:
+            if n.is_pi:
+                continue
+            for np in n.virtual_fanin:
+                connection_vars[np][n] = var_idx
+                rev_var_map[var_idx] = 'connection_vars[{}][{}] = {}'.format(np.coords, n.coords, var_idx)
                 var_idx += 1
 
-        nr_path_vars = var_idx - 1 - nr_sim_and_lut_vars - nr_selection_vars - nr_out_vars - nr_gate_type_vars
+        nr_connection_vars = var_idx - 1 - nr_sim_and_lut_vars - nr_selection_vars - nr_out_vars - nr_gate_type_vars
         if verbosity > 0:
-            print('Created {} path vars'.format(nr_path_vars))
+            print('Created {} connection vars'.format(nr_connection_vars))
 
         clauses = []
         # Create simulation propagation constraints
@@ -562,38 +615,37 @@ class scheme_graph:
         for n in self.nodes:
             if n.is_pi:
                 continue
-            for k in range(min_fanin, max_fanin+1):
-                fanin_options = svar_map[n][k]
-                for option in fanin_options:
-                    # Suppose node n selects this option, so option[0]
-                    # is true.  Then, there is a connection from all
-                    # nodes i in option[1:] to n.  Therefore, we must
-                    # set the variable encoding path[i][n] to true.
-                    # Note that we must filter out PI nodes from this
-                    # list.
-                    svar = option[0]
-                    innodes = [innode for innode in option[1:] if not innode.is_pi]
-                    for innode in innodes:
-                        clause = [0] * 2
-                        clause[0] = -svar
-                        clause[1] = path_vars[innode][n]
-                        clauses.append(clause)
-
-        # For all nodes n, if is path[n][n'] is true and
-        # path[n'][n''] is true, then path[n][n''] is true as
-        # well.
-        for n in self.nodes:
-            if n.is_pi:
-                continue
-            for np in self.nodes:
-                if np.is_pi:
-                    continue
-                for npp in self.nodes:
-                    if npp.is_pi:
-                        continue
-                    clauses.append([-path_vars[n][np], -path_vars[np][npp], path_vars[n][npp]])
-            # Ensure there is no path from n to itself.
-            clauses.append([-path_vars[n][n]])
+            # If svar -> n selects innode as fanin, then there is a
+            # connection between innode and n. Conversely, if there is
+            # a connection between innode and n, one of the selection
+            # variables that picks innode as a fanin of n must be
+            # true.
+            for innode in n.virtual_fanin:
+                for k in range(min_fanin, max_fanin+1):
+                    fanin_options = svar_map[n][k]
+                    for option in fanin_options:
+                        svar = option[0]
+                        innodes = [innode for innode in option[1:] if not innode.is_pi]
+                        for innode in innodes:
+                            clause = [0] * 2
+                            clause[0] = -svar
+                            clause[1] = connection_vars[innode][n]
+                            clauses.append(clause)
+            for innode in n.virtual_fanin:
+                potential_svars = []
+                for k in range(min_fanin, max_fanin+1):
+                    fanin_options = svar_map[n][k]
+                    innode_options = [option[0] for option in fanin_options if innode in option[1:]]
+                    potential_svars += innode_options
+                clause = [-connection_vars[innode][n]] + potential_svars
+                clauses.append(clause)
+                
+        # For every cycle in the graph, one of the variables
+        # representing a step on the cycle must be false.
+        for cycle in cycles:
+            cycle_steps = zip(cycle, cycle[1:])
+            cycle_lits = [-connection_vars[s[0]][s[1]] for s in cycle_steps]
+            clauses.append(cycle_lits)
 
         # Fix input vars
         for var in range(self.nr_pis):
@@ -751,10 +803,10 @@ class scheme_graph:
         for clause in clauses:
             solver.add_clause(clause)
 
-
 #        print(clauses)
         for model in solver.enum_models():
             # Decode network from solution
+            self.model = model
 #            print(model)
             if verbosity > 1:
                 for i in range(len(self.nodes)):
@@ -822,3 +874,11 @@ class scheme_graph:
 
             yield net
 
+    def print_model(self):
+        '''
+        Prints the model of the latest successful SAT call (if any).
+        '''
+        if self.model == None:
+            raise Exception('No model available')
+        for lit in self.model:
+            print(lit)

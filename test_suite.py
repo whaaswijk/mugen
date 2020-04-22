@@ -30,6 +30,71 @@ class graph_tests(unittest.TestCase):
         
         g.to_png('test')
 
+    def test_3x3_cycles(self):
+        '''
+        Builds a graph with a 3x3 USE topology and computes its cycles.
+        '''
+        g = scheme_graph(shape=(3,3))
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((2, 2), (2, 1))
+
+        cycles = g.find_cycles()
+        nr_cycles = len(cycles)
+#        for cycle in cycles:
+#            print(cycle)
+        self.assertEqual(nr_cycles, 8)
+
+    def test_4x4_cycles(self):
+        '''
+        Builds a graph with a 4x4 USE topology and computes its cycles.
+        '''
+        g = scheme_graph(shape=(4,4))
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((2, 0), (3, 0))
+        g.add_virtual_edge((3, 0), (3, 1))
+
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((3, 1), (2, 1))
+        g.add_virtual_edge((3, 1), (3, 2))
+
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((1, 2), (1, 3))
+        g.add_virtual_edge((2, 2), (2, 1))
+        g.add_virtual_edge((2, 2), (3, 2))
+        g.add_virtual_edge((3, 2), (3, 3))
+
+        g.add_virtual_edge((0, 3), (0, 2))
+        g.add_virtual_edge((1, 3), (0, 3))
+        g.add_virtual_edge((2, 3), (1, 3))
+        g.add_virtual_edge((2, 3), (2, 2))
+        g.add_virtual_edge((3, 3), (2, 3))
+
+        cycles = g.find_cycles()
+        nr_cycles = len(cycles)
+#        for cycle in cycles:
+#            print(cycle)
+        self.assertEqual(nr_cycles, 176)
+
+        
+        
 class synth_tests(unittest.TestCase):
 
     def test_and_synthesis(self):
@@ -49,6 +114,7 @@ class synth_tests(unittest.TestCase):
 
         models_found = 0
         for net in g.synthesize(functions):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
         self.assertEqual(models_found, 1)
 
@@ -61,6 +127,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
         self.assertEqual(models_found, 1)
 
@@ -71,8 +138,8 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-                        
         self.assertEqual(models_found, 1)
 
     def test_maj_synthesis(self):
@@ -84,6 +151,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,1,1,1]]
         models_found = 0
         for net in g.synthesize(functions):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
         self.assertEqual(models_found, 1)
 
@@ -123,9 +191,11 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,1,1,1]]
         models_found = 0
         for net in g.synthesize(functions):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-            break
-        self.assertEqual(models_found, 1)
+            if models_found > 1000:
+                break
+        self.assertTrue(models_found > 0)
 
         g = scheme_graph(shape=(2,2))
         g.enable_maj = False
@@ -135,6 +205,7 @@ class synth_tests(unittest.TestCase):
         g.add_virtual_edge((1, 1), (0, 1))
         functions = [[0,0,0,1,0,1,1,1]]
         models_found = 0
+        cycles = g.find_cycles()
         for net in g.synthesize(functions):
             models_found += 1
             break;
@@ -162,12 +233,11 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-#            print(net)
-#            net.to_png('mux-test')
-#            input()
-            break
-        self.assertEqual(models_found, 1)
+            if models_found > 1000:
+                break
+        self.assertTrue(models_found > 0)
 
     def test_disable_wire(self):
         '''
@@ -192,9 +262,8 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-            for n in net.nodes:
-                self.assertFalse(n.gate_type in ['WIRE', 'MAJ'])
             if models_found >= 10:
                 break
         self.assertTrue(models_found > 0)
@@ -223,13 +292,12 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-            if not net.has_border_io():
-                net.to_png('border-io-test')
-                self.assertTrue(False)
-            if models_found > 10000:
+            if models_found >= 10000:
                 net.to_png('border-io-test')
                 break
+#        print('Found {} border I/O models'.format(models_found))
         self.assertTrue(models_found > 0)
 
     def test_designated_pi(self):
@@ -268,10 +336,11 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-            self.assertTrue(net.has_designated_pi())
-            if models_found > 1000:
+            if models_found >= 1000:
                 break
+#        print('Found {} designated PI models'.format(models_found))            
         self.assertTrue(models_found > 0)
 
     def test_designated_po(self):
@@ -299,10 +368,11 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-            self.assertTrue(net.has_designated_po())
-            if models_found > 1000:
+            if models_found >= 1000:
                 break
+#        print('Found {} designated PO models'.format(models_found))
         self.assertTrue(models_found > 0)
 
     def test_restricted_io(self):
@@ -345,11 +415,42 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
+            self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-            self.assertTrue(net.has_designated_pi() and net.has_designated_po() and net.has_border_io())
-            if models_found > 1000:
+            if models_found >= 1000:
+                net.to_png('restricted-io')
                 break
+#        print('Found {} restricted I/O models'.format(models_found))
         self.assertTrue(models_found > 0)
+
+    def test_5_input_maj(self):
+        '''
+        Builds a circuit that computes a 5-input MAJ function without
+        using majority gates and while disabling "designated_pi",
+        "designated_po", and "border_io". Using a 3x3 USE topology.
+        '''
+        g = scheme_graph(shape=(3,3))
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((2, 2), (2, 1))
+        functions = [[0,0,0,1,0,0,0,1,0,0,0,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1,1,1,0,1,1,1]]
+        models_found = 0
+        for net in g.synthesize(functions): #, verbosity=2):
+            models_found += 1
+            if models_found >= 1000:
+                net.to_png('maj5')
+                break
+#        print('Found {} MAJ-5 models'.format(models_found))
+        self.assertTrue(models_found > 0) 
 
 if __name__ == '__main__':
     unittest.main()
