@@ -341,7 +341,6 @@ class scheme_graph:
                 self.nodes.append(self.node_map[(x,y)])
 
         sim_vars = {}
-        input_sim_vars = {}
         lut_vars = {}
         rev_var_map = {}
         var_idx = 1
@@ -359,6 +358,12 @@ class scheme_graph:
             enabled_gates.append('MAJ')
         assert(len(enabled_gates) > 0)
         nr_gate_types = len(enabled_gates)
+        # Determine the minimum and maximum number of fanins that are
+        # enabled.
+        gate_fanin_options = [self.gate_fanin_range[t] for t in enabled_gates]
+        min_fanin = min(gate_fanin_options)
+        max_fanin = max(gate_fanin_options)
+        
         if verbosity > 0:
             print('enabled_gates={}'.format(enabled_gates))
 
@@ -370,28 +375,17 @@ class scheme_graph:
 
         # Create simulation, input simulation, and LUT variables
         nr_sim_vars = len(functions[0])
-        nr_input_sim_vars = len(functions[0]) * 3
         nr_lut_vars = 8
         for n in self.nodes:
             nsimvars = [0] * nr_sim_vars
             for i in range(nr_sim_vars):
                 nsimvars[i] = var_idx
-                rev_var_map[var_idx] = 'nsimvars[{}][{}] = {}'.format(n.coords, i, var_idx)
+                rev_var_map[var_idx] = 'simvars[{}][{}] = {}'.format(n.coords, i, var_idx)
                 var_idx += 1
             sim_vars[n] = nsimvars
 
             if n.is_pi:
                 continue
-
-            ninputsimvars = {}
-            for i in range(3):
-                nsimvars = [0] * nr_sim_vars
-                for j in range(nr_sim_vars):
-                    nsimvars[j] = var_idx
-                    rev_var_map[var_idx] = 'nsimvars[{}] = {}'.format(j, var_idx)
-                    var_idx += 1
-                ninputsimvars[i] = nsimvars
-            input_sim_vars[n] = ninputsimvars
 
             nlutvars = [0] * nr_lut_vars
             for i in range(nr_lut_vars):
@@ -404,32 +398,35 @@ class scheme_graph:
         if verbosity > 0:
             print('Created {} SIM and LUT vars'.format(nr_sim_and_lut_vars))
 
-        # Create selection variables
-        svar_map = {} # Maps variables to PIs or internal node_map
-        fanin_options = {}
+        # Create selection variables. The variable svar_map is a
+        # 2-dimensional map from nodesxfanin-size to variablesxnodes.
+        # I.e. svar_map[n][1] maps n to a list of 2-tuples which
+        # contain all possible options for when node n has 1 fanin. If
+        # l = svar_map[n][1] and t = l[0], then t[0] is the variable
+        # encoding the situation in which n has fanin t[1].
+        svar_map = {} 
         pi_fanin_options = [self.nodes[x] for x in range(self.nr_pis)]
+
         for n in self.nodes:
             if n.is_pi:
                 continue
-            fanin_options[n] = {}
             svar_map[n] = {}
-            for k in range(3):
-                if (self.border_io and n.is_border_node) or not self.border_io:
-                    fanin_options[n][k] = pi_fanin_options + n.virtual_fanin
-                else:
-                    fanin_options[n][k] = n.virtual_fanin
-                nr_fanin_options = len(fanin_options[n][k])
-                if verbosity > 0:
-                    print('fanin options for {}[{}]: {}'.format(n.coords, k, fanin_options[n][k]))
-                assert(nr_fanin_options > 0)
-                # Create variables for the 3 potentially used fanin ports
-                svar_map[n][k] = [0] * nr_fanin_options
-                for i in range(nr_fanin_options):
-                    svar_map[n][k][i] = var_idx
-                    rev_var_map[var_idx] = 'svar_map[{}][{}][{}] = {} ({})'.format(
-                        n.coords, k, i, fanin_options[n][k][i].coords, var_idx)
+            fanin_options = None
+            if (self.border_io and n.is_border_node) or not self.border_io:
+                fanin_options = pi_fanin_options + n.virtual_fanin
+            else:
+                fanin_options = n.virtual_fanin
+            for k in range(min_fanin, max_fanin+1):
+                svar_map[n][k] = []
+                # Select all possible k-tuples from the fanin options.
+                for t in itertools.combinations(fanin_options, k):
+                    vt = [0] * (k + 1)
+                    vt[0] = var_idx
+                    for kp in range(k):
+                        vt[kp+1] = t[kp]
+                    svar_map[n][k].append(vt)
                     var_idx += 1
-
+                
         nr_selection_vars = var_idx - 1 - nr_sim_and_lut_vars
         if verbosity > 0:
             print('Created {} selection vars'.format(nr_selection_vars))
@@ -453,6 +450,7 @@ class scheme_graph:
         if verbosity > 0:
             print('Created {} output vars'.format(nr_out_vars))
 
+        # Create gate-type variables
         gate_type_vars = {}
         for n in self.nodes:
             if n.is_pi:
@@ -490,37 +488,44 @@ class scheme_graph:
         for n in self.nodes:
             if n.is_pi:
                 continue
-            for tt_idx in range(nr_sim_vars):
-                permutations = list(itertools.product('01', repeat=4))
-                for permutation in permutations:
-                    function_output = int(permutation[0])
-                    const_vals = []
-                    f_idx = 0
-                    for i in range(3):
-                        const_val = int(permutation[i+1])
-                        const_vals.append(const_val)
-                        f_idx += (const_val << i)
+            for k in range(min_fanin, max_fanin+1):
+                fanin_options = svar_map[n][k]
+                for option in fanin_options:
+                    svar = option[0]
+                    for tt_idx in range(nr_sim_vars):
+                        permutations = list(itertools.product('01', repeat=(k+1)))
+                        for permutation in permutations:
+                            function_output = int(permutation[0])
+                            const_vals = []
+                            f_idx = 0
+                            for i in range(k):
+                                const_val = int(permutation[i+1])
+                                const_vals.append(const_val)
+                                f_idx += (const_val << i)
 
-                    clause = []
-                    if function_output == 1:
-                        clause.append(-sim_vars[n][tt_idx])
-                    else:
-                        clause.append(sim_vars[n][tt_idx])
-                    for i in range(len(const_vals)):
-                        if const_vals[i] == 1:
-                            clause.append(-input_sim_vars[n][i][tt_idx])
-                        else:
-                            clause.append(input_sim_vars[n][i][tt_idx])
-                    if function_output == 1:
-                        clause.append(lut_vars[n][f_idx])
-                    else:
-                        clause.append(-lut_vars[n][f_idx])
-                    clauses.append(clause)
+                            clause = [0] * (k + 3)
+                            clause[0] = -svar
+                            if function_output == 1:
+                                clause[1] = -sim_vars[n][tt_idx]
+                            else:
+                                clause[1] = sim_vars[n][tt_idx]
+                            for i in range(len(const_vals)):
+                                if const_vals[i] == 1:
+                                    # option[i+1] refers to the i-th fanin node
+                                    clause[i+2] = -sim_vars[option[i+1]][tt_idx]
+                                else:
+                                    clause[i+2] = sim_vars[option[i+1]][tt_idx]
+                            if function_output == 1:
+                                clause[k+2] = lut_vars[n][f_idx]
+                            else:
+                                clause[k+2] = -lut_vars[n][f_idx]
+                            clauses.append(clause)
 
-        # Make sure each node selects some fanin on each of its input
-        # ports. Note that the number of fanins it needs to select
-        # depends on its gate type: e.g. AND gates need 2 fanins, MAJ
-        # gates need 3.
+        # Make sure each node selects exactly one fanin option. Note
+        # that the number of fanins it needs to select depends on its
+        # gate type: e.g. AND gates need 2 fanins, MAJ gates need
+        # 3. If a node selects a k-fanin gate, we disable selection of
+        # all options that have more or fewer fanin.
         for n in self.nodes:
             if n.is_pi:
                 continue
@@ -529,60 +534,50 @@ class scheme_graph:
                 gate_type_var = ngatetypevars[i]
                 gate_type = enabled_gates[i]
                 fanin_range = self.gate_fanin_range[gate_type]
-                for k in range(fanin_range):
-                    clauses.append([-gate_type_var] + svar_map[n][k])
-            # Make sure that a gate never has more than one fanin from
-            # the same gate.
-            for i in range(len(svar_map[n][0])):
-                i_fanin = [svar_map[n][0][i], svar_map[n][1][i], svar_map[n][2][i]]
-                cnf = CardEnc.atmost(lits=i_fanin, encoding=EncType.pairwise)
+                kfanin_options = svar_map[n][fanin_range]
+                # option[0] is the selection variable whose truth
+                # implies that node n selects the fanins nodes in fanin[1:],
+                # which should number fanin_range.
+                kfanin_vars = [option[0] for option in kfanin_options]
+                cnf = CardEnc.equals(lits=kfanin_vars, encoding=EncType.pairwise)
                 for clause in cnf.clauses:
-                    clauses.append(clause)            
-
-        # Add fanin selection constraints.
-        for y in range(self.shape[1]):
-            for x in range(self.shape[0]):
-                n = self.node_map[(x,y)]
-                for k in range(3):
-                    options = fanin_options[n][k]
-                    nr_fanin_options = len(options)
-                    for i in range(nr_fanin_options):
-                        innode = options[i]
-                        # Suppose fanin k of node n selects option i.
-                        # Then, for all tt_idx, input truth table of
-                        # node n at tt_idx must equal truth table of i
-                        # at tt_idx.
-                        for tt_idx in range(nr_sim_vars):
-                            clause = [0] * 3
-                            clause[0] = -svar_map[n][k][i]
-                            clause[1] = -input_sim_vars[n][k][tt_idx]
-                            clause[2] = sim_vars[innode][tt_idx]
-                            clauses.append(clause)
-                            clause = [0] * 3
-                            clause[0] = -svar_map[n][k][i]
-                            clause[1] = input_sim_vars[n][k][tt_idx]
-                            clause[2] = -sim_vars[innode][tt_idx]
-                            clauses.append(clause)
-
+                    clauses.append([-gate_type_var] + clause)
+                # Selection of this gate type should prevent all fanin
+                # options with more or fewer fanin.
+                for j in range(len(enabled_gates)):
+                    if j == i:
+                        continue
+                    diff_var = ngatetypevars[j]
+                    diff_type = enabled_gates[j]
+                    diff_fanin_range = self.gate_fanin_range[diff_type]
+                    if diff_fanin_range == fanin_range: # same fanin
+                        continue
+                    diff_fanin_options = svar_map[n][diff_fanin_range]
+                    diff_fanin_vars = [option[0] for option in diff_fanin_options]
+                    clauses.append([-gate_type_var, -diff_var])
+                    for var in diff_fanin_vars:
+                        clauses.append([-gate_type_var, -var])
+                        
         # Create cycle-prevention constraints.
         for n in self.nodes:
             if n.is_pi:
                 continue
-            for k in range(3):
-                options = fanin_options[n][k]
-                nr_fanin_options = len(options)
-                for i in range(nr_fanin_options):
-                    innode = options[i]
-                    if innode.is_pi:
-                        continue
-                    # Suppose fanin k of node n selects option i.
-                    # Then, there is a connection from node i to node
-                    # n.  Therefore, we must set the variable encoding
-                    # path[i][n] to true.
-                    clause = [0] * 2
-                    clause[0] = -svar_map[n][k][i]
-                    clause[1] = path_vars[innode][n]
-                    clauses.append(clause)
+            for k in range(min_fanin, max_fanin+1):
+                fanin_options = svar_map[n][k]
+                for option in fanin_options:
+                    # Suppose node n selects this option, so option[0]
+                    # is true.  Then, there is a connection from all
+                    # nodes i in option[1:] to n.  Therefore, we must
+                    # set the variable encoding path[i][n] to true.
+                    # Note that we must filter out PI nodes from this
+                    # list.
+                    svar = option[0]
+                    innodes = [innode for innode in option[1:] if not innode.is_pi]
+                    for innode in innodes:
+                        clause = [0] * 2
+                        clause[0] = -svar
+                        clause[1] = path_vars[innode][n]
+                        clauses.append(clause)
 
         # For all nodes n, if is path[n][n'] is true and
         # path[n'][n''] is true, then path[n][n''] is true as
@@ -663,12 +658,11 @@ class scheme_graph:
             for np in self.nodes:
                 if np.is_pi or np == n:
                     continue
-                for k in range(3):
-                    options = fanin_options[np][k]
-                    nr_fanin_options = len(options)
-                    for i in range(nr_fanin_options):
-                        if options[i] == n:
-                            fanout_vars.append(svar_map[np][k][i])
+                for k in range(min_fanin, max_fanin+1):
+                    fanin_options = svar_map[np][k]
+                    for option in fanin_options:
+                        if n in option[1:]:
+                            fanout_vars.append(option[0])
                             fanout_nodes.append(np.coords)
             if verbosity > 1:
                 print('fanout_vars {}: {}'.format(n.coords, list(zip(fanout_nodes, fanout_vars))))
@@ -699,30 +693,27 @@ class scheme_graph:
                 for np in self.nodes:
                     if np.is_pi or np == n:
                         continue
-                    for k in range(3):
-                        options = fanin_options[np][k]
-                        nr_fanin_options = len(options)
-                        for i in range(nr_fanin_options):
-                            if options[i] == n:
-                                fanout_vars.append(svar_map[np][k][i])
+                    for k in range(min_fanin, max_fanin+1):
+                        fanin_options = svar_map[np][k]
+                        for option in fanin_options:
+                            if n in option[1:]:
+                                fanout_vars.append(option[0])
                                 fanout_options.append(np.coords)
 
                 # If enabled, WIRE is the first gate type variable.
                 ngatetypevars = gate_type_vars[n]
                 wire_type_var = ngatetypevars[0]
-                for k in range(3):
-                    options = fanin_options[n][k]
-                    for i in range(len(options)):
-                        innode = options[i]
-                        if innode.is_pi:
-                            pi_var = svar_map[n][k][i]
-                            clauses.append([-pi_var, wire_type_var])
+                for k in range(min_fanin, max_fanin+1):
+                    fanin_options = svar_map[n][k]
+                    for option in fanin_options:
+                        if any(innode.is_pi for innode in option[1:]):
+                            svar = option[0]
+                            clauses.append([-svar, wire_type_var])
                             # A designated PI can only have single fanout.
                             cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise)
                             #print('would add: {}'.format(cnf.clauses))
-                            
                             for clause in cnf.clauses:
-                                clauses.append([-pi_var] + clause)
+                                clauses.append([-svar] + clause)
     
         if self.designated_po:
             assert(self.enable_wire)
@@ -735,12 +726,11 @@ class scheme_graph:
                 for np in self.nodes:
                     if np.is_pi or np == n:
                         continue
-                    for k in range(3):
-                        options = fanin_options[np][k]
-                        nr_fanin_options = len(options)
-                        for i in range(nr_fanin_options):
-                            if options[i] == n:
-                                fanout_vars.append(svar_map[np][k][i])
+                    for k in range(min_fanin, max_fanin+1):
+                        fanin_options = svar_map[np][k]
+                        for option in fanin_options:
+                            if n in option[1:]:
+                                fanout_vars.append(option[0])
                 # If enabled, WIRE is the first gate type variable.
                 ngatetypevars = gate_type_vars[n]
                 wire_type_var = ngatetypevars[0]
@@ -814,21 +804,21 @@ class scheme_graph:
                 netnode.is_border_node = n.is_border_node
                 netnode.function = lut_tt
                 netnode.gate_type = gate_type
-                for k in range(fanin_range):
-                    options = fanin_options[n][k]
-                    for j in range(len(options)):
-                        var = svar_map[n][k][j]
-                        model_val = model[var - 1]
-                        if model_val > 0:
-                            innode = options[j]
+                fanin_options = svar_map[n][fanin_range]
+                nr_valid_fanin_options = 0
+                for option in fanin_options:
+                    svar = option[0]
+                    model_val = model[svar - 1]
+                    if model_val > 0:
+                        nr_valid_fanin_options += 1
+                        fanin_idx = 0
+                        for innode in option[1:]:
                             if innode.is_pi:
-#                                netnode.fanin[k] = net.nodes[innode.coords]
-                                netnode.set_fanin(k, net.nodes[innode.coords])
+                                netnode.set_fanin(fanin_idx, net.nodes[innode.coords])
                             else:
-#                                netnode.fanin[k] = net.node_map[innode.coords]
-                                netnode.set_fanin(k, net.node_map[innode.coords])
-                            if verbosity > 1:
-                                print('{}[{}] = {} (var {})'.format(n.coords, k, innode.coords, var))
+                                netnode.set_fanin(fanin_idx, net.node_map[innode.coords])
+                            fanin_idx += 1
+                assert(nr_valid_fanin_options == 1)
 
             yield net
 

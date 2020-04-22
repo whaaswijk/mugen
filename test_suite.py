@@ -39,7 +39,8 @@ class synth_tests(unittest.TestCase):
         '''
         # Create a very simple graph for a 1x1 grid with 2 PIs.
         # Disable all gate types except for and. Try to synthesize an
-        # AND function and count the number of solutions.
+        # AND function and count the number of solutions. There should
+        # be a unique solution.
         g = scheme_graph(shape=(1,1))
         g.enable_or = False
         g.enable_not = False
@@ -49,11 +50,10 @@ class synth_tests(unittest.TestCase):
         models_found = 0
         for net in g.synthesize(functions):
             models_found += 1
-        self.assertEqual(models_found, 4)
+        self.assertEqual(models_found, 1)
 
-        # Do the same thing but now say there are 3 PIs. The number of
-        # solutions will increase because of the extra degree of
-        # freedom for the 3rd fanin.
+        # Do the same thing but now say there are 3 PIs. There should
+        # still only be one model.
         g = scheme_graph(shape=(1,1))
         g.enable_or = False
         g.enable_not = False
@@ -62,7 +62,7 @@ class synth_tests(unittest.TestCase):
         models_found = 0
         for net in g.synthesize(functions):
             models_found += 1
-        self.assertEqual(models_found, 6)
+        self.assertEqual(models_found, 1)
 
         # Again do the same thing but now allow all gate types. The
         # number of solutions shouldn't change, because MAJ and OR
@@ -72,20 +72,20 @@ class synth_tests(unittest.TestCase):
         models_found = 0
         for net in g.synthesize(functions):
             models_found += 1
-        self.assertEqual(models_found, 6)
+                        
+        self.assertEqual(models_found, 1)
 
     def test_maj_synthesis(self):
         '''
-        Test synthesis of a single majority gate with 3 inputs.  The
-        number of solutions should be 3! (=6), since there is a
-        single gate and we can pick any PI for any gate fanin.
+        Test synthesis of a single majority gate with 3 inputs.  There
+        should be a unique solution.
         '''
         g = scheme_graph(shape=(1,1))
         functions = [[0,0,0,1,0,1,1,1]]
         models_found = 0
         for net in g.synthesize(functions):
             models_found += 1
-        self.assertEqual(models_found, 6)
+        self.assertEqual(models_found, 1)
 
     def test_maj_fail(self):
         # If we disable MAJ gates, we shouldn't be able to synthesize
