@@ -295,13 +295,13 @@ class scheme_graph:
                 cycles.append([n] + path)
             return
         for innode in n.virtual_fanin:
-            self.dfs_find_cycles(cycles, start, innode, [n] + path)
+            self.dfs_find_cycles(self, cycles, start, innode, [n] + path)
 
     def find_cycles(self):
         cycles = []
         for n in self.node_map.values():
             for innode in n.virtual_fanin:
-                self.dfs_find_cycles(cycles, n, innode, [n])
+                self.dfs_find_cycles(self, cycles, n, innode, [n])
         return cycles
 
     def to_png(self, filename):
@@ -518,7 +518,7 @@ class scheme_graph:
             print('Created {} gate-type vars'.format(nr_gate_type_vars))
 
         # Create graph connection and path variables
-        cycles = self.find_cycles()
+        cycles = self.find_cycles(self)
         connection_vars = {}
         for n in self.nodes:
             if n.is_pi:
