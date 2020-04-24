@@ -406,6 +406,7 @@ class scheme_graph:
         if self.enable_or:
             enabled_gates.append('OR')
         if self.enable_maj:
+            assert(self.nr_pis > 2)
             enabled_gates.append('MAJ')
         assert(len(enabled_gates) > 0)
         nr_gate_types = len(enabled_gates)
@@ -593,6 +594,7 @@ class scheme_graph:
                 # which should number fanin_range.
                 kfanin_vars = [option[0] for option in kfanin_options]
                 cnf = CardEnc.equals(lits=kfanin_vars, encoding=EncType.pairwise)
+
                 for clause in cnf.clauses:
                     clauses.append([-gate_type_var] + clause)
                 # Selection of this gate type should prevent all fanin

@@ -454,6 +454,7 @@ class synth_tests(unittest.TestCase):
         Builds a circuit that computes the XOR-2 function. Using a 3x3 USE topology.
         '''
         g = scheme_graph(shape=(3,3))
+        g.enable_maj = False
         g.add_virtual_edge((0, 0), (1, 0))
         g.add_virtual_edge((1, 0), (2, 0))
         g.add_virtual_edge((1, 0), (1, 1))
@@ -480,6 +481,7 @@ class synth_tests(unittest.TestCase):
         Builds a circuit that computes the XOR-2 function. Using a 3x3 USE topology.
         '''
         g = scheme_graph(shape=(3,3))
+        g.enable_maj = False
         g.add_virtual_edge((0, 0), (1, 0))
         g.add_virtual_edge((1, 0), (2, 0))
         g.add_virtual_edge((1, 0), (1, 1))
@@ -497,7 +499,7 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions): #, verbosity=2):
             models_found += 1
             if models_found >= 1000:
-                net.to_png('XOR-2')
+                net.to_png('XNOR-2')
                 break
         self.assertTrue(models_found > 0)
         
