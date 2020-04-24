@@ -423,11 +423,9 @@ class synth_tests(unittest.TestCase):
 #        print('Found {} restricted I/O models'.format(models_found))
         self.assertTrue(models_found > 0)
 
-    def test_5_input_maj(self):
+    def test_no_multi_edges(self):
         '''
-        Builds a circuit that computes a 5-input MAJ function without
-        using majority gates and while disabling "designated_pi",
-        "designated_po", and "border_io". Using a 3x3 USE topology.
+        Builds a circuit that should not contain multi-edges. Using a 3x3 USE topology.
         '''
         g = scheme_graph(shape=(3,3))
         g.add_virtual_edge((0, 0), (1, 0))
@@ -447,10 +445,88 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions): #, verbosity=2):
             models_found += 1
             if models_found >= 1000:
-                net.to_png('maj5')
+                net.to_png('multi-edges')
                 break
-#        print('Found {} MAJ-5 models'.format(models_found))
         self.assertTrue(models_found > 0) 
+        
+    def test_XOR2(self):
+        '''
+        Builds a circuit that computes the XOR-2 function. Using a 3x3 USE topology.
+        '''
+        g = scheme_graph(shape=(3,3))
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((2, 2), (2, 1))
+        functions = [[0,1,1,0]]
+        models_found = 0
+        for net in g.synthesize(functions): #, verbosity=2):
+            models_found += 1
+            if models_found >= 1000:
+                net.to_png('XOR-2')
+                break
+        self.assertTrue(models_found > 0)
+        
+    def test_XNOR2(self):
+        '''
+        Builds a circuit that computes the XOR-2 function. Using a 3x3 USE topology.
+        '''
+        g = scheme_graph(shape=(3,3))
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((2, 2), (2, 1))
+        functions = [[1,0,0,1]]
+        models_found = 0
+        for net in g.synthesize(functions): #, verbosity=2):
+            models_found += 1
+            if models_found >= 1000:
+                net.to_png('XOR-2')
+                break
+        self.assertTrue(models_found > 0)
+        
+    def test_MUX21(self):
+        '''
+        Builds a circuit that computes the 2:1 MUX function. Using a 3x3 USE topology.
+        Designated I/O pins are required at the layout borders.
+        '''
+        g = scheme_graph(shape=(3,3), border_io=True, designated_pi=True, designated_po=True)
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((2, 2), (2, 1))
+        functions = [[0,1,0,1,0,0,1,1]]
+        models_found = 0
+        for net in g.synthesize(functions): #, verbosity=2):
+            models_found += 1
+            if models_found >= 1000:
+                net.to_png('MUX21')
+                break
+        self.assertTrue(models_found > 0)
 
 if __name__ == '__main__':
     unittest.main()
