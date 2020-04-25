@@ -208,6 +208,7 @@ class synth_tests(unittest.TestCase):
         cycles = g.find_cycles()
         for net in g.synthesize(functions):
             models_found += 1
+            net.to_png('and-or-mux')
             break;
         self.assertEqual(models_found, 0)
 
@@ -241,7 +242,7 @@ class synth_tests(unittest.TestCase):
 
     def test_disable_wire(self):
         '''
-        Build a circuit that computes a MUX function without using
+        Build a circuit that computes a 3-input AND function without using
         majority gates or WIRE elements. Using a 3x3 USE topology.
         '''
         g = scheme_graph(shape=(3,3))
@@ -259,13 +260,14 @@ class synth_tests(unittest.TestCase):
         g.add_virtual_edge((0, 2), (1, 2))
         g.add_virtual_edge((1, 2), (2, 2))
         g.add_virtual_edge((2, 2), (2, 1))
-        functions = [[0,0,1,1,0,1,0,1]]
+        functions = [[0,0,0,0,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
             self.assertTrue(g.satisfies_spec(net))
             models_found += 1
-            if models_found >= 10:
+            if models_found >= 1000:
                 break
+#        print('Found {} models'.format(models_found))
         self.assertTrue(models_found > 0)
 
     def test_border_io(self):
@@ -345,7 +347,7 @@ class synth_tests(unittest.TestCase):
 
     def test_designated_po(self):
         '''
-        Builds a circuit that computes a 3-input MUX without using
+        Builds a circuit that computes a 3-input AND without using
         majority gates and while enabling "designated_po". Using a 3x3
         USE topology.  Verifies that only WIRE elements have PO
         fanout.
@@ -365,7 +367,7 @@ class synth_tests(unittest.TestCase):
         g.add_virtual_edge((0, 2), (1, 2))
         g.add_virtual_edge((1, 2), (2, 2))
         g.add_virtual_edge((2, 2), (2, 1))
-        functions = [[0,0,1,1,0,1,0,1]]
+        functions = [[0,0,0,0,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
             self.assertTrue(g.satisfies_spec(net))
