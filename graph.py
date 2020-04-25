@@ -214,7 +214,7 @@ class scheme_graph:
         'AND':  [0, 0, 0, 1, 0, 0, 0, 1],
         'OR':   [0, 1, 1, 1, 0, 1, 1, 1],
         'MAJ':  [0, 0, 0, 1, 0, 1, 1, 1],
-        'WIRE': [0, 1, 0, 1, 0, 1, 0, 1]
+        'WIRE': [0, 1, 0, 1, 0, 1, 0, 1],
     }
 
     # Reverse map of truth tables to gate types.
@@ -223,16 +223,16 @@ class scheme_graph:
         (0, 0, 0, 1, 0, 0, 0, 1): 'AND',
         (0, 1, 1, 1, 0, 1, 1, 1): 'OR',
         (0, 0, 0, 1, 0, 1, 1, 1): 'MAJ',
-        (0, 1, 0, 1, 0, 1, 0, 1): 'WIRE'
+        (0, 1, 0, 1, 0, 1, 0, 1): 'WIRE',
     }
 
     # Mapping gate types to the corresponding number of fanins.
     gate_fanin_range = {
-        'NOT': 1,
-        'AND': 2,
-        'OR': 2,
-        'MAJ': 3,
-        'WIRE': 1
+        'NOT':  1,
+        'AND':  2,
+        'OR':   2,
+        'MAJ':  3,
+        'WIRE': 1,
     }
 
     def __init__(self, *, shape=(1,1), border_io=False,
@@ -504,13 +504,23 @@ class scheme_graph:
 
         # Create gate-type variables
         gate_type_vars = {}
+        gate_var_fanin_range = {}
         for n in self.nodes:
             if n.is_pi:
                 continue
-            ngatetypevars = [0] * nr_gate_types
-            for i in range(nr_gate_types):
-                ngatetypevars[i] = var_idx
-                rev_var_map[var_idx] = 'ngatetypevars[{}] = {}'.format(i, var_idx)
+            ngatetypevars = {}
+            for t in enabled_gates:
+                # It's possible that certain gates cannot support all
+                # fanin ranges. For example, consider the gate at
+                # (1,1) in a 3x3 USE topology with border I/O. It has
+                # only two possible fanins, so it cannot support a MAJ
+                # gate.
+                fanin_range = self.gate_fanin_range[t]
+                if len(svar_map[n][fanin_range]) == 0:
+                    continue
+                ngatetypevars[t] = var_idx
+                gate_var_fanin_range[var_idx] = fanin_range
+                rev_var_map[var_idx] = 'ngatetypevars[{}][{}] = {}'.format(n.coords, t, var_idx)
                 var_idx += 1
             gate_type_vars[n] = ngatetypevars
 
@@ -584,27 +594,23 @@ class scheme_graph:
             if n.is_pi:
                 continue
             ngatetypevars = gate_type_vars[n]
-            for i in range(len(enabled_gates)):
-                gate_type_var = ngatetypevars[i]
-                gate_type = enabled_gates[i]
-                fanin_range = self.gate_fanin_range[gate_type]
+            for gate_type_var in ngatetypevars.values():
+                fanin_range = gate_var_fanin_range[gate_type_var]
                 kfanin_options = svar_map[n][fanin_range]
+                assert(len(kfanin_options) > 0)
                 # option[0] is the selection variable whose truth
                 # implies that node n selects the fanins nodes in fanin[1:],
                 # which should number fanin_range.
                 kfanin_vars = [option[0] for option in kfanin_options]
                 cnf = CardEnc.equals(lits=kfanin_vars, encoding=EncType.pairwise)
-
                 for clause in cnf.clauses:
                     clauses.append([-gate_type_var] + clause)
                 # Selection of this gate type should prevent all fanin
                 # options with more or fewer fanin.
-                for j in range(len(enabled_gates)):
-                    if j == i:
+                for diff_var in ngatetypevars.values():
+                    if diff_var == gate_type_var:
                         continue
-                    diff_var = ngatetypevars[j]
-                    diff_type = enabled_gates[j]
-                    diff_fanin_range = self.gate_fanin_range[diff_type]
+                    diff_fanin_range = gate_var_fanin_range[diff_var]
                     if diff_fanin_range == fanin_range: # same fanin
                         continue
                     diff_fanin_options = svar_map[n][diff_fanin_range]
@@ -685,19 +691,21 @@ class scheme_graph:
                 continue
             # Gate n must pick exactly one of the enabled gate types
             ngatetypevars = gate_type_vars[n]
-            cnf = CardEnc.equals(lits=ngatetypevars, encoding=EncType.pairwise)
+            cnf = CardEnc.equals(lits=ngatetypevars.values(), encoding=EncType.pairwise)
             for clause in cnf.clauses:
                 clauses.append(clause)
 
-            for i in range(nr_gate_types):
-                gate_type = enabled_gates[i]
+            for gate_type in enabled_gates:
+                # Some gates may not support all gate types.
+                if not gate_type in ngatetypevars:
+                    continue
                 gate_tt = self.gate_tts[gate_type]
                 nlutvars = lut_vars[n]
                 for j in range(8):
                     if gate_tt[j] == 1:
-                        clauses.append([-ngatetypevars[i], nlutvars[j]])
+                        clauses.append([-ngatetypevars[gate_type], nlutvars[j]])
                     else:
-                        clauses.append([-ngatetypevars[i], -nlutvars[j]])
+                        clauses.append([-ngatetypevars[gate_type], -nlutvars[j]])
 
         # Add cardinality constraints on gate fanouts. These
         # constraints depend on the gate type. AND/OR/NOT/MAJ gates
@@ -721,11 +729,13 @@ class scheme_graph:
             if verbosity > 1:
                 print('fanout_vars {}: {}'.format(n.coords, list(zip(fanout_nodes, fanout_vars))))
             # Create cardinality constraints based on gate type.
-            for i in range(len(enabled_gates)):
+            for gate_type in enabled_gates:
+                if not gate_type in ngatetypevars:
+                    continue
                 bound = 1
-                if enabled_gates[i] == 'WIRE':                    
-                        bound = 3
-                gt_var = ngatetypevars[i]
+                if gate_type == 'WIRE':
+                    bound = 3
+                gt_var = ngatetypevars[gate_type]
                 cnf = CardEnc.atmost(lits=fanout_vars, encoding=EncType.pairwise, bound=bound)
                 if verbosity > 1:
                     print('fanout cardinality clauses: {}'.format([[-gt_var] + clause for clause in cnf.clauses]))
@@ -756,7 +766,7 @@ class scheme_graph:
 
                 # If enabled, WIRE is the first gate type variable.
                 ngatetypevars = gate_type_vars[n]
-                wire_type_var = ngatetypevars[0]
+                wire_type_var = ngatetypevars['WIRE']
                 for k in range(min_fanin, max_fanin+1):
                     fanin_options = svar_map[n][k]
                     for option in fanin_options:
@@ -787,7 +797,7 @@ class scheme_graph:
                                 fanout_vars.append(option[0])
                 # If enabled, WIRE is the first gate type variable.
                 ngatetypevars = gate_type_vars[n]
-                wire_type_var = ngatetypevars[0]
+                wire_type_var = ngatetypevars['WIRE']
                 # If one of the POs points to this gate, it has to be
                 # a WIRE. Moreover, it cannot have any other fanout.
                 for h in range(nr_outputs):
