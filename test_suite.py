@@ -513,20 +513,31 @@ class synth_tests(unittest.TestCase):
         Builds a circuit that computes the 2:1 MUX function. Using a 3x3 USE topology.
         Designated I/O pins are required at the layout borders.
         '''
-        g = scheme_graph(shape=(3,3), border_io=True, designated_pi=True, designated_po=True)
+        g = scheme_graph(shape=(5,3), border_io=True, designated_pi=True, designated_po=True)
 #        g = scheme_graph(shape=(3,3), border_io=True, designated_po=True)
         g.add_virtual_edge((0, 0), (1, 0))
         g.add_virtual_edge((1, 0), (2, 0))
         g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((2, 0), (3, 0))
+        g.add_virtual_edge((3, 0), (3, 1))
         g.add_virtual_edge((0, 1), (0, 0))
         g.add_virtual_edge((1, 1), (0, 1))
         g.add_virtual_edge((1, 1), (1, 2))
         g.add_virtual_edge((2, 1), (2, 0))
         g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((3, 1), (2, 1))
+        g.add_virtual_edge((3, 1), (3, 2))
         g.add_virtual_edge((0, 2), (0, 1))
         g.add_virtual_edge((0, 2), (1, 2))
         g.add_virtual_edge((1, 2), (2, 2))
         g.add_virtual_edge((2, 2), (2, 1))
+        g.add_virtual_edge((2, 2), (3, 2))
+        g.add_virtual_edge((3, 0), (4, 0))
+        g.add_virtual_edge((4, 1), (4, 0))
+        g.add_virtual_edge((4, 1), (3, 1))
+        g.add_virtual_edge((4, 2), (4, 1))
+        g.add_virtual_edge((3, 2), (4, 2))
+
         functions = [[0,1,0,1,0,0,1,1]]
         models_found = 0
         for net in g.synthesize(functions):
@@ -534,8 +545,8 @@ class synth_tests(unittest.TestCase):
             if models_found >= 1000:
                 net.to_png('MUX21')
                 break
-#        print('Found {} MUX21 models'.format(models_found))
-#        self.assertTrue(models_found > 0)
+        print('Found {} MUX21 models'.format(models_found))
+        self.assertTrue(models_found > 0)
 
 if __name__ == '__main__':
     unittest.main()
