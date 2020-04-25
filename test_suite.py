@@ -545,7 +545,7 @@ class synth_tests(unittest.TestCase):
             if models_found >= 1000:
 #                net.to_png('MUX21')
                 break
-        print('Found {} MUX21 models'.format(models_found))
+#        print('Found {} MUX21 models'.format(models_found))
         self.assertTrue(models_found > 0)
 
 if __name__ == '__main__':
