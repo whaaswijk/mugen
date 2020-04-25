@@ -297,7 +297,7 @@ class synth_tests(unittest.TestCase):
             self.assertTrue(g.satisfies_spec(net))
             models_found += 1
             if models_found >= 10000:
-                net.to_png('border-io-test')
+#                net.to_png('border-io-test')
                 break
 #        print('Found {} border I/O models'.format(models_found))
         self.assertTrue(models_found > 0)
@@ -420,7 +420,7 @@ class synth_tests(unittest.TestCase):
             self.assertTrue(g.satisfies_spec(net))
             models_found += 1
             if models_found >= 1000:
-                net.to_png('restricted-io')
+#                net.to_png('restricted-io')
                 break
 #        print('Found {} restricted I/O models'.format(models_found))
         self.assertTrue(models_found > 0)
@@ -447,7 +447,7 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions): #, verbosity=2):
             models_found += 1
             if models_found >= 1000:
-                net.to_png('multi-edges')
+#                net.to_png('multi-edges')
                 break
         self.assertTrue(models_found > 0) 
         
@@ -475,7 +475,7 @@ class synth_tests(unittest.TestCase):
             models_found += 1
             self.assertTrue(g.satisfies_spec(net))
             if models_found >= 1000:
-                net.to_png('XOR-2')
+#                net.to_png('XOR-2')
                 break
         self.assertTrue(models_found > 0)
         
@@ -503,7 +503,7 @@ class synth_tests(unittest.TestCase):
             models_found += 1
             self.assertTrue(g.satisfies_spec(net))
             if models_found >= 1000:
-                net.to_png('XNOR-2')
+#                net.to_png('XNOR-2')
                 break
 #        print('Found {} XNOR-2 models'.format(models_found))
         self.assertTrue(models_found > 0)
@@ -543,7 +543,7 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions):
             models_found += 1
             if models_found >= 1000:
-                net.to_png('MUX21')
+#                net.to_png('MUX21')
                 break
         print('Found {} MUX21 models'.format(models_found))
         self.assertTrue(models_found > 0)
