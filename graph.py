@@ -201,6 +201,41 @@ class logic_network:
 
         dot.render(filename=filename, format='png', cleanup=True)
 
+    def rec_simulate(self, n, sim_vals):
+        for innode in n.fanin.values():
+            if not innode in sim_vals:
+                self.rec_simulate(innode, sim_vals)
+        tt_idx = 0
+        for i in range(len(n.fanin)):
+            tt_idx = tt_idx + (sim_vals[n.fanin[i]] << i)
+        sim_vals[n] = n.function[tt_idx]
+
+    def simulate(self):
+        '''
+        Simulates the logic network and returns a list which contains the
+        simulated function for each output.
+        '''
+        sim_tt = [[0] * (2 ** self.nr_pis) for i in range(self.nr_pos)]
+        sim_idx = 0
+        for input_pattern in itertools.product('01', repeat=self.nr_pis):
+            # Reverse input pattern, since our PI ordering is the
+            # inverse of itertools.product.
+            input_pattern = input_pattern[::-1]
+            sim_vals = {}
+            process_q = []
+            for i in range(self.nr_pis):
+                n = self.nodes[i]
+                sim_vals[n] = int(input_pattern[i])
+            for i in range(self.nr_pos):
+                n = self.po_map[i]
+                self.rec_simulate(n, sim_vals)
+                sim_tt[i][sim_idx] = sim_vals[n]
+            sim_idx += 1
+        if self.nr_pis == 2:
+            for i in range(self.nr_pos):
+                sim_tt[i] = sim_tt[i] + sim_tt[i]
+        return sim_tt
+
 class scheme_graph:
     '''
     A scheme_graph (short for clocking-scheme graph) is used
@@ -339,7 +374,7 @@ class scheme_graph:
 
         dot.render(filename=filename, format='png', cleanup=True)
 
-    def satisfies_spec(self, net):
+    def satisfies_spec(self, net, functions):
         '''
         Verifies that a network satisfies the specifications represented
         by this scheme_graph object.
@@ -376,10 +411,13 @@ class scheme_graph:
             return False
         if self.designated_po and not net.has_designated_po():
             return False
+        sim_tts = net.simulate()
+        for i in range(len(functions)):
+            if functions[i] != sim_tts[i]:
+                return False
         return True
 
     def synthesize(self, functions, verbosity=0):
-
         '''
         Synthesizes a logic network according to the clocking scheme
         specifications encoded in the graph and the functional

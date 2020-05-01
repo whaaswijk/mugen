@@ -114,7 +114,7 @@ class synth_tests(unittest.TestCase):
 
         models_found = 0
         for net in g.synthesize(functions):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
         self.assertEqual(models_found, 1)
 
@@ -127,7 +127,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
         self.assertEqual(models_found, 1)
 
@@ -138,7 +138,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
         self.assertEqual(models_found, 1)
 
@@ -151,7 +151,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,1,1,1]]
         models_found = 0
         for net in g.synthesize(functions):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
         self.assertEqual(models_found, 1)
 
@@ -191,7 +191,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,1,0,1,1,1]]
         models_found = 0
         for net in g.synthesize(functions):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
             if models_found > 1000:
                 break
@@ -234,7 +234,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
             if models_found > 1000:
                 break
@@ -263,7 +263,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,0,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
             if models_found >= 1000:
                 break
@@ -294,7 +294,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
             if models_found >= 10000:
 #                net.to_png('border-io-test')
@@ -338,7 +338,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
             if models_found >= 1000:
                 break
@@ -370,7 +370,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,0,0,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
             if models_found >= 1000:
                 break
@@ -417,7 +417,7 @@ class synth_tests(unittest.TestCase):
         functions = [[0,0,1,1,0,1,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             models_found += 1
             if models_found >= 1000:
 #                net.to_png('restricted-io')
@@ -473,7 +473,7 @@ class synth_tests(unittest.TestCase):
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
             models_found += 1
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             if models_found >= 1000:
 #                net.to_png('XOR-2')
                 break
@@ -501,7 +501,7 @@ class synth_tests(unittest.TestCase):
         models_found = 0
         for net in g.synthesize(functions): #, verbosity=2):
             models_found += 1
-            self.assertTrue(g.satisfies_spec(net))
+            self.assertTrue(g.satisfies_spec(net, functions))
             if models_found >= 1000:
 #                net.to_png('XNOR-2')
                 break
