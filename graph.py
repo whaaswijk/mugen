@@ -336,11 +336,66 @@ class scheme_graph:
             self.dfs_find_cycles(cycles, start, innode, [n] + path)
 
     def find_cycles(self):
+        '''
+        Examines the clocking scheme graph and finds any cycles it may
+        contain.
+        '''
         cycles = []
         for n in self.node_map.values():
             for innode in n.virtual_fanin:
                 self.dfs_find_cycles(cycles, n, innode, [n])
         return cycles
+
+    def find_crossings(self):
+        '''
+        Examines the clocking scheme graph and returns a dictionary of
+        nodes that could potentially be crossings. A crossing connects
+        its two fanins to two fanouts by using overlapping wires. This
+        is encoded in the dictionary by mapping crossing nodes to
+        2-tuples. Each entry in the 2-tuple is itself a 2-tuple which
+        holds one of the crossing's fanin/fanout pairs. For example,
+        consider a 3x3 USE topology. Node (1,1) has 2 (virtual) fanins
+        and fanouts, so it can support a crossing. This crossing
+        connects (1,0) to (1,2) and (2,1) to (0,1). Thus, the
+        dictionary would map (1,1) to (((1, 0), (1,2)), ((2,1), (0,
+        1))).
+        '''
+        cnodes = {}
+        for n in self.node_map.values():
+            if n.is_pi:
+                continue
+            if len(n.virtual_fanin) == 2 and len(n.virtual_fanout) == 2:
+                # n is a potential crossing
+                assert(not n.is_border_node)
+                t = [[None,None],[None,None]]
+                north_node = self.node_map[n.coords[0], n.coords[1] - 1]
+                east_node = self.node_map[n.coords[0] + 1, n.coords[1]]
+                south_node = self.node_map[n.coords[0], n.coords[1] + 1]
+                west_node = self.node_map[n.coords[0] - 1, n.coords[1]]
+                pairs_found = 0
+                if north_node in n.virtual_fanin:
+                    assert(south_node in n.virtual_fanout)
+                    t[pairs_found][0] = north_node
+                    t[pairs_found][1] = south_node
+                    pairs_found += 1
+                if east_node in n.virtual_fanin:
+                    assert(west_node in n.virtual_fanout)
+                    t[pairs_found][0] = east_node
+                    t[pairs_found][1] = west_node
+                    pairs_found += 1
+                if south_node in n.virtual_fanin:
+                    assert(north_node in n.virtual_fanout)
+                    t[pairs_found][0] = south_node
+                    t[pairs_found][1] = north_node
+                    pairs_found += 1
+                if west_node in n.virtual_fanin:
+                    assert(east_node in n.virtual_fanout)
+                    t[pairs_found][0] = west_node
+                    t[pairs_found][1] = east_node
+                    pairs_found += 1
+                assert(pairs_found == 2)
+                cnodes[n] = t
+        return cnodes
 
     def to_png(self, filename):
         '''
@@ -405,6 +460,10 @@ class scheme_graph:
             for n in net.nodes:
                 if not n.is_pi and n.gate_type == 'MAJ':
                     return False
+        if not self.enable_crossings:
+            for n in net.nodes:
+                if not n.is_pi and n.gate_type == 'CROSSING':
+                    return False
         if self.border_io and not net.has_border_io():
             return False
         if self.designated_pi and not net.has_designated_pi():
@@ -455,6 +514,8 @@ class scheme_graph:
         if self.enable_maj:
             assert(self.nr_pis > 2)
             enabled_gates.append('MAJ')
+        if self.enable_crossings:
+            enabled_gates.append('CROSSING')
         assert(len(enabled_gates) > 0)
         nr_gate_types = len(enabled_gates)
         # Determine the minimum and maximum number of fanins that are

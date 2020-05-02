@@ -548,5 +548,97 @@ class synth_tests(unittest.TestCase):
 #        print('Found {} MUX21 models'.format(models_found))
         self.assertTrue(models_found > 0)
 
+class crossing_tests(unittest.TestCase):
+
+    def test_3x3_USE(self):
+        '''
+        Builds a 3x3 USE topology and finds the potential crossings in it.
+        '''
+        g = scheme_graph(shape=(3,3))
+        g.enable_maj = False
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((2, 2), (2, 1))
+
+        crossings = g.find_crossings()
+        self.assertEqual(len(crossings), 1)
+        cnode = g.node_map[(1,1)]
+        self.assertTrue(cnode in crossings)
+        cross_pairs = crossings[cnode]
+        potential_pairs = [[g.node_map[(1,0)], g.node_map[(1,2)]], [g.node_map[(2,1)], g.node_map[(0,1)]]]
+        self.assertTrue(cross_pairs[0] in potential_pairs)
+        self.assertTrue(cross_pairs[1] in potential_pairs)
+
+    def test_4x4_USE(self):
+        '''
+        Builds a 4x4 USE topology and finds the potential crossings in it.
+        '''
+        g = scheme_graph(shape=(4,4))
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((2, 0), (3, 0))
+        g.add_virtual_edge((3, 0), (3, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((3, 1), (2, 1))
+        g.add_virtual_edge((3, 1), (3, 2))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((1, 2), (1, 3))
+        g.add_virtual_edge((2, 2), (2, 1))
+        g.add_virtual_edge((2, 2), (3, 2))
+        g.add_virtual_edge((3, 2), (3, 3))
+        g.add_virtual_edge((0, 3), (0, 2))
+        g.add_virtual_edge((1, 3), (0, 3))
+        g.add_virtual_edge((2, 3), (1, 3))
+        g.add_virtual_edge((2, 3), (2, 2))
+        g.add_virtual_edge((3, 3), (2, 3))
+
+        crossings = g.find_crossings()
+        self.assertEqual(len(crossings), 4)
+
+        cnode = g.node_map[(1,1)]
+        self.assertTrue(cnode in crossings)
+        cross_pairs = crossings[cnode]
+        potential_pairs = [[g.node_map[(1,0)], g.node_map[(1,2)]], [g.node_map[(2,1)], g.node_map[(0,1)]]]
+        self.assertTrue(cross_pairs[0] in potential_pairs)
+        self.assertTrue(cross_pairs[1] in potential_pairs)
+
+        cnode = g.node_map[(2,1)]
+        self.assertTrue(cnode in crossings)
+        cross_pairs = crossings[cnode]
+        potential_pairs = [[g.node_map[(2,2)], g.node_map[(2,0)]], [g.node_map[(3,1)], g.node_map[(1,1)]]]
+        self.assertTrue(cross_pairs[0] in potential_pairs)
+        self.assertTrue(cross_pairs[1] in potential_pairs)
+
+        cnode = g.node_map[(1,2)]
+        self.assertTrue(cnode in crossings)
+        cross_pairs = crossings[cnode]
+        potential_pairs = [[g.node_map[(1,1)], g.node_map[(1,3)]], [g.node_map[(0,2)], g.node_map[(2,2)]]]
+        self.assertTrue(cross_pairs[0] in potential_pairs)
+        self.assertTrue(cross_pairs[1] in potential_pairs)
+
+        cnode = g.node_map[(2,2)]
+        self.assertTrue(cnode in crossings)
+        cross_pairs = crossings[cnode]
+        potential_pairs = [[g.node_map[(1,2)], g.node_map[(3,2)]], [g.node_map[(2,3)], g.node_map[(2,1)]]]
+        self.assertTrue(cross_pairs[0] in potential_pairs)
+        self.assertTrue(cross_pairs[1] in potential_pairs)
+
+
 if __name__ == '__main__':
     unittest.main()
