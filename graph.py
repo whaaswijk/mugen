@@ -977,16 +977,6 @@ class scheme_graph:
                 for clause in cnf.clauses:
                     clauses.append(clause)
             else:
-                '''
-                This is stating for each fanin direction that at most
-                one svar can be true, but we want this to hold for all
-                svars, no matter their direction.
-
-                for direction, svars in n.svar_direction_map.items():
-                    cnf = CardEnc.atmost(lits=svars, encoding=EncType.pairwise)
-                    for clause in cnf.clauses:
-                        clauses.append(clause)
-                '''
                 cnf = CardEnc.atmost(lits=n.svars, encoding=EncType.pairwise)
                 for clause in cnf.clauses:
                         clauses.append(clause)
