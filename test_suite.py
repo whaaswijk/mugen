@@ -110,7 +110,6 @@ class synth_tests(unittest.TestCase):
         g.enable_or = False
         g.enable_not = False
         g.enable_maj = False
-        g.enable_crossings = False
         functions = [[0,0,0,1]]
 
         models_found = 0
@@ -125,7 +124,6 @@ class synth_tests(unittest.TestCase):
         g.enable_or = False
         g.enable_not = False
         g.enable_maj = False
-        g.enable_crossings = False
         functions = [[0,0,0,1,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
@@ -137,7 +135,6 @@ class synth_tests(unittest.TestCase):
         # the number of solutions shouldn't change, because MAJ and OR
         # gates do not help us here.
         g = scheme_graph(shape=(1,1))
-        g.enable_crossings = False
         functions = [[0,0,0,1,0,0,0,1]]
         models_found = 0
         for net in g.synthesize(functions):
@@ -445,7 +442,7 @@ class synth_tests(unittest.TestCase):
             if models_found >= 1000:
 #                net.to_png('restricted-io')
                 break
-#        print('Found {} restricted I/O models'.format(models_found))
+#        print('\nFound {} restricted I/O models'.format(models_found))
         self.assertTrue(models_found > 0)
 
     def test_no_multi_edges(self):

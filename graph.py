@@ -989,7 +989,7 @@ class scheme_graph:
                             for d in unused_directions:
                                 for tt_idx in range(nr_local_sim_vars):
                                     sim_var = n.sim_vars[d][tt_idx]
-                                    clauses.append([-svar, -sim_var])
+                                    clauses.append([-svar, -gate_var, -sim_var])
                 else:
                     fanin_size = GATE_FANIN_RANGE[gate_type]
                     gate_var = n.gate_type_map[gate_type]
