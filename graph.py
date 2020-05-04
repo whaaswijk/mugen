@@ -285,6 +285,16 @@ class logic_network:
             if len(n.fanout) > 1:
                 raise SynthesisException('{} is designated PO but has multiple fanout'.format(
                     n.coords))
+
+    def verify_consecutive_not(self):
+        for n in self.nodes:
+            if n.is_pi:
+                continue
+            if n.gate_type == 'NOT':
+                for _, innode in n.fanin.items():
+                    if not innode.is_pi and innode.gate_type == 'NOT':
+                        raise SynthesisException('{} is NOT gate and has NOT fanin {}'.format(
+                            n.coords, innode.coords))
     
     def to_png(self, filename):
         '''
@@ -490,8 +500,6 @@ class scheme_graph:
         self.designated_po = designated_po
         self.model = None
 
-
-    
     def add_virtual_edge(self, coords1, coords2):
         '''
         Adds a virtual edge from the node corresponding to the tile at
@@ -649,18 +657,13 @@ class scheme_graph:
             net.verify_designated_pi()
         if self.designated_po:
             net.verify_designated_po()
+        net.verify_consecutive_not()
         sim_tts = net.simulate()
         for i in range(len(functions)):
             if functions[i] != sim_tts[i]:
                 raise SynthesisException('Specified f[{}] = {}, net out[{}] = {}'.format(
                     i, functions[i], i, sim_tts[i]))
 
-    # TODO: it can be the case that a border node has no virtual
-    # fanouts (e.g. in the 3x3 USE topology). If so, we can simply
-    # choose any of the none-fanin directions as a virtual fanout
-    # direction in order to make sure that the node has at least one
-    # output. This is necessary since we do not generate simulation
-    # variables for nodes without outputs.
     def discover_connectivity(self, n, pi_fanin_options):
         # Check which directions support fanouts.
         fanout_directions = set()
@@ -692,7 +695,6 @@ class scheme_graph:
             outdir, indir = get_direction(innode.coords, n.coords)
             assert(indir not in fanin_options)
             fanin_options[indir] = [(innode, outdir)]
-#        print('{} has fanin options: {}'.format(n.coords, fanin_options))
         n.fanout_directions = fanout_directions
         n.fanin_directions = fanin_directions
         n.fanin_options = fanin_options
@@ -1229,6 +1231,19 @@ class scheme_graph:
                             for clause in cnf.clauses:
                                 clauses.append([-houtvar] + clause)
 
+        # Symmetry break: disallow consecutive NOT gates.
+        if self.enable_not:
+            for n in self.nodes:
+                if n.is_pi:
+                    continue
+                not_type_var = n.gate_type_map['NOT']
+                for svar, fanins in n.svar_map[1].items():
+                    innode = fanins[0][1][0]
+                    if innode.is_pi:
+                        continue
+                    innode_not_var = innode.gate_type_map['NOT']
+                    clauses.append([-not_type_var, -svar, -innode_not_var])
+
         # Create solver instance, add clauses, and start solving.
         solver = Glucose3()
         for clause in clauses:
@@ -1310,21 +1325,6 @@ class scheme_graph:
                                     netnode.set_fanin(in_dir, net.node_map[innode.coords], out_dir)
                 assert(nr_selected_svars <= 1) # may be zero if EMPTY
             yield net
-
-
-
-
-                
-
-
-
-
-#         nr_clauses = len(clauses)
-#         if verbosity > 0:
-#             print('nr clauses: {}'.format(nr_clauses))
-
-
-# #        print(clauses)
 
 
     def print_model(self):
