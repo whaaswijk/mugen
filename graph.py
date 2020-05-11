@@ -700,7 +700,6 @@ class scheme_graph:
             if self.enable_or:
                 enabled_gates.append('OR')
             if self.enable_maj and len(n.fanin_options) > 2:
-                assert(self.nr_pis > 2)
                 enabled_gates.append('MAJ')
             if self.enable_crossings:
                 if ((not n.is_border_node and (len(n.virtual_fanin) == 2)) or
