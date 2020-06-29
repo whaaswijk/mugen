@@ -6,6 +6,7 @@ from pysat.card import *
 import sys
 import subprocess
 import os
+import tempfile
 
 class SynthesisException(Exception):
 
@@ -1217,7 +1218,8 @@ class scheme_graph:
             # Start by creating the temporary CNF file for it to act on.
             models = []
             while True:
-                with open('tmp.cnf', 'w') as f:
+                proc = None
+                with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
                     f.write('p cnf {} {}\n'.format(var_idx - 1, len(clauses) + len(models)))
                     for clause in clauses:
                         for v in clause:
@@ -1227,8 +1229,9 @@ class scheme_graph:
                         for v in model:
                             f.write('{} '.format(-v))
                         f.write('0\n')
-                proc = subprocess.run(['glucose-syrup', '-nthreads={}'.format(self.nr_threads), '-model', 'tmp.cnf'], capture_output=True, text=True)
-                os.remove('tmp.cnf')
+                    f.close()
+                    proc = subprocess.run(['glucose-syrup', '-nthreads={}'.format(self.nr_threads), '-model', f.name], capture_output=True, text=True)
+                    os.remove(f.name)
                 if proc.returncode == 10:
                     # Glucose returns 10 on SAT
                     output = proc.stdout.split('\n')
