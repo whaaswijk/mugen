@@ -49,7 +49,7 @@ Mugen uses Glucose::MultiSolvers to perform parallel synthesis. You can
 download Glucose 4.x [here](https://www.labri.fr/perso/lsimon/glucose/). In
 order for parallel synthesis to work, you must first build the parallel glucose
 solver, which can be found under ${GLUCOSE_ROOT}/parallel. You then have to add
-${GLUCOSE_ROOT}/parallel to your PATH so that Mugen can find it. 
+${GLUCOSE_ROOT}/parallel to your PATH so that Mugen can find the Glucose binary. 
 
 ## wrapt-timeout-decorator 
 
