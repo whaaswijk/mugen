@@ -4,6 +4,8 @@ from math import log2
 from pysat.solvers import Glucose3
 from pysat.card import *
 import sys
+import subprocess
+import os
 
 class SynthesisException(Exception):
 
@@ -464,9 +466,8 @@ class scheme_graph:
 
     def __init__(self, *, shape=(1,1),
                  enable_wire=True, enable_not=True, enable_and=True,
-                 enable_or=True, enable_maj=True,
-                 enable_crossings=True, designated_pi=False,
-                 designated_po=False):
+                 enable_or=True, enable_maj=True, enable_crossings=True, 
+                 designated_pi=False, designated_po=False, nr_threads=1):
         '''
         Creates a new clocking scheme graph according to specifications.
         Defines the following properties.
@@ -498,6 +499,7 @@ class scheme_graph:
         self.enable_crossings = enable_crossings
         self.designated_pi = designated_pi
         self.designated_po = designated_po
+        self.nr_threads = nr_threads
         self.model = None
 
     def add_virtual_edge(self, coords1, coords2):
@@ -1183,87 +1185,131 @@ class scheme_graph:
                     innode_not_var = innode.gate_type_map['NOT']
                     clauses.append([-not_type_var, -svar, -innode_not_var])
 
-        # Create solver instance, add clauses, and start solving.
-        solver = Glucose3()
-        for clause in clauses:
-            solver.add_clause(clause)
+        if self.nr_threads <= 1:
+            # Create solver instance, add clauses, and start solving.
+            solver = Glucose3()
+            for clause in clauses:
+                solver.add_clause(clause)
 
-        # Decode network from solutions
-        model_idx = 1
-        prev_model = None
-        for model in solver.enum_models():
-            if verbosity > 1:
-                logfile = open('model-{}.log'.format(model_idx), 'w')
-                if prev_model != None:
-                    for i in range(len(model)):
-                        if model[i] != prev_model[i]:
-                            logfile.write('model[{}] = {}, prev_model[{}] = {}\n'.format(
-                                i, 1 if model[i] > 0 else 0, i, 1 if prev_model[i] > 0 else 0
-                            ))
-                for v in model:
-                    logfile.write('{}\n'.format(v))
-                for v, s in legend.items():
-                    logfile.write('{}: {} ({})\n'.format(v, s, True if model[v-1] > 0 else False))
-                logfile.close()
-            self.model = model
-            prev_model = model
-            net = logic_network(self.shape, self.nr_pis, self.nr_pos)
-            for h in range(nr_outputs):
-                houtvars = out_vars[h]
-                out_found = 0
-                for houtvar, (n, d) in houtvars.items():
-                    if model[houtvar - 1] > 0:
-                        #if verbosity > 1:
-#                        print('out[{}] -> ({}, {}) (houtvar={})'.format(h, n.coords, d, houtvar))
-                        out_found += 1
-                        net.set_output(h, n.coords, d)
-                # Every output must point to exactly one output port.
-                assert(out_found == 1)
-
-            for n in self.nodes:
-                if n.is_pi:
-                    continue
+            # Decode network from solutions
+            model_idx = 1
+            prev_model = None
+            for model in solver.enum_models():
                 if verbosity > 1:
-                    for gate_type in n.enabled_gate_types:
-                        print('{} gate type {}: {} ({})'.format(
-                        n.coords, gate_type, 1 if model[n.gate_type_map[gate_type]-1] > 0 else 0,
-                        model[n.gate_type_map[gate_type]-1]))
-                    for direction in n.fanout_directions:
-                        print('{} tt[{}]: '.format(n.coords, direction), end='')
-                        for tt_idx in range(nr_local_sim_vars):
-                            print('{}'.format(1 if model[n.sim_vars[direction][tt_idx]-1] > 0 else 0), end='')
-                        print(' ', end='')
-                        for tt_idx in range(nr_local_sim_vars):
-                            print('({})'.format(model[n.sim_vars[direction][tt_idx]-1]), end='')
-                        print('')
-                    
-                netnode = net.node_map[n.coords]
-                # Find out the gate type.
-                gate_types_found = 0
-                for gate_type, gate_var in n.gate_type_map.items():
-                    if model[gate_var - 1] > 0:
-                        gate_types_found += 1
-                        netnode.gate_type = gate_type
-                assert(gate_types_found == 1)
+                    logfile = open('model-{}.log'.format(model_idx), 'w')
+                    if prev_model != None:
+                        for i in range(len(model)):
+                            if model[i] != prev_model[i]:
+                                logfile.write('model[{}] = {}, prev_model[{}] = {}\n'.format(
+                                    i, 1 if model[i] > 0 else 0, i, 1 if prev_model[i] > 0 else 0
+                                ))
+                    for v in model:
+                        logfile.write('{}\n'.format(v))
+                    for v, s in legend.items():
+                        logfile.write('{}: {} ({})\n'.format(v, s, True if model[v-1] > 0 else False))
+                    logfile.close()
+                self.model = model
+                prev_model = model
+                net = self.model_to_network(model, nr_outputs, out_vars, nr_local_sim_vars, verbosity)
+                yield net
+        else:
+            # Use Glucose::MultiSolvers to find a solution.
+            # Start by creating the temporary CNF file for it to act on.
+            models = []
+            while True:
+                with open('tmp.cnf', 'w') as f:
+                    f.write('p cnf {} {}\n'.format(var_idx - 1, len(clauses) + len(models)))
+                    for clause in clauses:
+                        for v in clause:
+                            f.write('{} '.format(v))
+                        f.write('0\n')
+                    for model in models:
+                        for v in model:
+                            f.write('{} '.format(-v))
+                        f.write('0\n')
+                proc = subprocess.run(['glucose-syrup', '-nthreads={}'.format(self.nr_threads), '-model', 'tmp.cnf'], capture_output=True, text=True)
+                os.remove('tmp.cnf')
+                if proc.returncode == 10:
+                    # Glucose returns 10 on SAT
+                    output = proc.stdout.split('\n')
+                    model = []
+                    for line in output:
+                        if line[:1] == 'v':
+                            modelvals = line.split(' ')[1:]
+                            for modelval in modelvals:
+                                if modelval != '0':
+                                    model.append(int(modelval))
+                    models.append(model)
+                    net = self.model_to_network(model, nr_outputs, out_vars, nr_local_sim_vars, verbosity)
+                    yield net
+                elif proc.returncode == 20:
+                    # Glucose returns 20 on UNSAT
+                    break
+                elif proc.returncode == 0:
+                    # Glucose returns 0 on timeout/interrupt
+                    break
+                else:
+                    # Error in calling SAT solver.
+                    raise SynthesisException('Error calling Glucose::MultiSolvers')
+
+    def model_to_network(self, model, nr_outputs, out_vars, nr_local_sim_vars, verbosity):
+        net = logic_network(self.shape, self.nr_pis, self.nr_pos)
+        for h in range(nr_outputs):
+            houtvars = out_vars[h]
+            out_found = 0
+            for houtvar, (n, d) in houtvars.items():
+                if model[houtvar - 1] > 0:
+                    #if verbosity > 1:
+#                        print('out[{}] -> ({}, {}) (houtvar={})'.format(h, n.coords, d, houtvar))
+                    out_found += 1
+                    net.set_output(h, n.coords, d)
+            # Every output must point to exactly one output port.
+            assert(out_found == 1)
+
+        for n in self.nodes:
+            if n.is_pi:
+                continue
+            if verbosity > 1:
+                for gate_type in n.enabled_gate_types:
+                    print('{} gate type {}: {} ({})'.format(
+                    n.coords, gate_type, 1 if model[n.gate_type_map[gate_type]-1] > 0 else 0,
+                    model[n.gate_type_map[gate_type]-1]))
+                for direction in n.fanout_directions:
+                    print('{} tt[{}]: '.format(n.coords, direction), end='')
+                    for tt_idx in range(nr_local_sim_vars):
+                        print('{}'.format(1 if model[n.sim_vars[direction][tt_idx]-1] > 0 else 0), end='')
+                    print(' ', end='')
+                    for tt_idx in range(nr_local_sim_vars):
+                        print('({})'.format(model[n.sim_vars[direction][tt_idx]-1]), end='')
+                    print('')
+                
+            netnode = net.node_map[n.coords]
+            # Find out the gate type.
+            gate_types_found = 0
+            for gate_type, gate_var in n.gate_type_map.items():
+                if model[gate_var - 1] > 0:
+                    gate_types_found += 1
+                    netnode.gate_type = gate_type
+            assert(gate_types_found == 1)
 #                print('{} is {}-gate'.format(netnode.coords, netnode.gate_type))
-                netnode.is_border_node = n.is_border_node
-                nr_selected_svars = 0
-                nr_fanin = 0
-                for size_option in n.svar_map.keys():
-                    for svar, comb in n.svar_map[size_option].items():
-                        if model[svar - 1] > 0:
-                            nr_selected_svars += 1
+            netnode.is_border_node = n.is_border_node
+            nr_selected_svars = 0
+            nr_fanin = 0
+            for size_option in n.svar_map.keys():
+                for svar, comb in n.svar_map[size_option].items():
+                    if model[svar - 1] > 0:
+                        nr_selected_svars += 1
 #                            print('{} has fanin {}'.format(n.coords, comb))
-                            for i in range(size_option):
-                                in_dir = comb[i][0]
-                                innode = comb[i][1][0]
-                                out_dir = comb[i][1][1]
-                                if innode.is_pi:
-                                    netnode.set_fanin(in_dir, net.nodes[innode.coords], out_dir)
-                                else:
-                                    netnode.set_fanin(in_dir, net.node_map[innode.coords], out_dir)
-                assert(nr_selected_svars <= 1) # may be zero if EMPTY
-            yield net
+                        for i in range(size_option):
+                            in_dir = comb[i][0]
+                            innode = comb[i][1][0]
+                            out_dir = comb[i][1][1]
+                            if innode.is_pi:
+                                netnode.set_fanin(in_dir, net.nodes[innode.coords], out_dir)
+                            else:
+                                netnode.set_fanin(in_dir, net.node_map[innode.coords], out_dir)
+            assert(nr_selected_svars <= 1) # may be zero if EMPTY
+        return net
 
 
     def print_model(self):

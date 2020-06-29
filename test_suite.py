@@ -533,7 +533,7 @@ class synth_tests(unittest.TestCase):
                 break
 #        print('\nFound {} XOR-2 models'.format(models_found))
         self.assertTrue(models_found > 0)
-        
+       
     def test_XNOR2(self):
         '''
         Builds a circuit that computes the XNOR-2 function. Using a 4x4
@@ -615,6 +615,58 @@ class synth_tests(unittest.TestCase):
                 break
 #        print('\nFound {} MUX21 models'.format(models_found))
         self.assertTrue(models_found > 0)
+
+    def test_parallel_XOR2(self):
+        '''
+        Builds a circuit that computes the XOR-2 function. Using a 3x3 USE topology.
+        Synthesize all possible models using both a sequential and a parallel solver
+        and make sure that they find the same number.
+        '''
+        g = scheme_graph(shape=(4,4))
+        g.enable_maj = False
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((2, 0), (3, 0))
+        g.add_virtual_edge((3, 0), (3, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((3, 1), (2, 1))
+        g.add_virtual_edge((3, 1), (3, 2))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((1, 2), (1, 3))
+        g.add_virtual_edge((2, 2), (2, 1))
+        g.add_virtual_edge((2, 2), (3, 2))
+        g.add_virtual_edge((3, 2), (3, 3))
+        g.add_virtual_edge((0, 3), (0, 2))
+        g.add_virtual_edge((1, 3), (0, 3))
+        g.add_virtual_edge((2, 3), (1, 3))
+        g.add_virtual_edge((2, 3), (2, 2))
+        g.add_virtual_edge((3, 3), (2, 3))
+        functions = [[0,1,1,0]]
+        sequential_models_found = 0
+        for net in g.synthesize(functions): #, verbosity=2):
+            sequential_models_found += 1
+            g.satisfies_spec(net, functions)
+            if sequential_models_found >= 100:
+                break
+#        print('\nFound {} sequential XOR-2 models'.format(sequential_models_found))
+        g.nr_threads = 4
+        parallel_models_found = 0
+        for net in g.synthesize(functions): #, verbosity=2):
+            parallel_models_found += 1
+            g.satisfies_spec(net, functions)
+            if parallel_models_found >= 100:
+                break
+#        print('\nFound {} parallel XOR-2 models'.format(parallel_models_found))
+        self.assertTrue(sequential_models_found > 0)
+        self.assertEqual(sequential_models_found, parallel_models_found)
+
 
 if __name__ == '__main__':
     unittest.main()
