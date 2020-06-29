@@ -1,4 +1,7 @@
-from graphviz import Digraph
+try:
+	from graphviz import Digraph
+except ModuleNotFoundError:
+	pass
 import itertools
 from math import log2
 from pysat.solvers import Glucose3
