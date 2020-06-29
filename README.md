@@ -17,6 +17,10 @@ More advanced features include:
 - Toggling I/O pins.
 - Toggling border I/O.
 
+Mugen has been tested under Linux and should generally work on Unix systems.
+Windows is currently not supported, although much of the functionality may
+still work.
+
 # Dependencies
 
 ## Numpy/Anaconda
@@ -37,6 +41,15 @@ is to simply use pip:
 
 ```sh
 pip install python-sat
+```
+
+## wrapt-timeout-decorator 
+
+To support timeouts, Mugen uses
+[wrapt-timeout-decorator](https://pypi.org/project/wrapt-timeout-decorator/). It can be installed using pip:
+
+```
+pip install wrapt_timeout_wrapper
 ```
 
 ## Graphviz (Optional)

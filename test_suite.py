@@ -667,6 +667,43 @@ class synth_tests(unittest.TestCase):
         self.assertTrue(sequential_models_found > 0)
         self.assertEqual(sequential_models_found, parallel_models_found)
 
+    def test_timeout(self):
+        '''
+        Try to synthesize a function that is impossible to implement on a 4x4
+        USE topology. Use a timeout to make sure we don't spend too
+        much time performing useless work.
+        '''
+        g = scheme_graph(shape=(4,4))
+        g.enable_maj = False
+        g.timeout = 10
+        g.add_virtual_edge((0, 0), (1, 0))
+        g.add_virtual_edge((1, 0), (2, 0))
+        g.add_virtual_edge((1, 0), (1, 1))
+        g.add_virtual_edge((2, 0), (3, 0))
+        g.add_virtual_edge((3, 0), (3, 1))
+        g.add_virtual_edge((0, 1), (0, 0))
+        g.add_virtual_edge((1, 1), (0, 1))
+        g.add_virtual_edge((1, 1), (1, 2))
+        g.add_virtual_edge((2, 1), (2, 0))
+        g.add_virtual_edge((2, 1), (1, 1))
+        g.add_virtual_edge((3, 1), (2, 1))
+        g.add_virtual_edge((3, 1), (3, 2))
+        g.add_virtual_edge((0, 2), (0, 1))
+        g.add_virtual_edge((0, 2), (1, 2))
+        g.add_virtual_edge((1, 2), (2, 2))
+        g.add_virtual_edge((1, 2), (1, 3))
+        g.add_virtual_edge((2, 2), (2, 1))
+        g.add_virtual_edge((2, 2), (3, 2))
+        g.add_virtual_edge((3, 2), (3, 3))
+        g.add_virtual_edge((0, 3), (0, 2))
+        g.add_virtual_edge((1, 3), (0, 3))
+        g.add_virtual_edge((2, 3), (1, 3))
+        g.add_virtual_edge((2, 3), (2, 2))
+        g.add_virtual_edge((3, 3), (2, 3))
+        functions = [[1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0]]
+        with self.assertRaises(TimeoutError):
+            for net in g.synthesize(functions): #, verbosity=2):
+                pass
 
 if __name__ == '__main__':
     unittest.main()

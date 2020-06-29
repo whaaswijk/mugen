@@ -7,6 +7,7 @@ import sys
 import subprocess
 import os
 import tempfile
+import wrapt_timeout_decorator
 
 class SynthesisException(Exception):
 
@@ -101,7 +102,6 @@ def eval_gate(gate_type, inputs):
         raise SynthesisException("No evaluation support for gate type '{}'".format(gate_type))
 
 class node:
-
     '''
     A generic node class, used by both clocking scheme graphs
     and logic networks.
@@ -468,7 +468,8 @@ class scheme_graph:
     def __init__(self, *, shape=(1,1),
                  enable_wire=True, enable_not=True, enable_and=True,
                  enable_or=True, enable_maj=True, enable_crossings=True, 
-                 designated_pi=False, designated_po=False, nr_threads=1):
+                 designated_pi=False, designated_po=False, nr_threads=1,
+                 timeout=0):
         '''
         Creates a new clocking scheme graph according to specifications.
         Defines the following properties.
@@ -502,6 +503,7 @@ class scheme_graph:
         self.designated_po = designated_po
         self.nr_threads = nr_threads
         self.model = None
+        self.timeout = 0
 
     def add_virtual_edge(self, coords1, coords2):
         '''
@@ -653,6 +655,20 @@ class scheme_graph:
         n.io_directions = io_directions
 
     def synthesize(self, functions, verbosity=0):
+        @wrapt_timeout_decorator.timeout(self.timeout)
+        def timeout_call(self, functions, verbosity):
+            for net in self._synthesize(functions, verbosity):
+                return net
+
+        if self.timeout <= 0:
+            for net in self._synthesize(functions, verbosity):
+                yield net
+        else:
+            net = None
+            net = timeout_call(self, functions, verbosity)
+            yield net
+
+    def _synthesize(self, functions, verbosity):
         '''
         Synthesizes a logic network according to the clocking scheme
         specifications encoded in the graph and the functional
