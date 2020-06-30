@@ -664,7 +664,6 @@ class scheme_graph:
             for net in self._synthesize(functions, verbosity):
                 yield net
         else:
-            net = None
             net = timeout_call(self, functions, verbosity)
             yield net
 
