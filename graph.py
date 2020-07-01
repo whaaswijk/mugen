@@ -299,6 +299,18 @@ class logic_network:
                         raise SynthesisException('{} is NOT gate and has NOT fanin {}'.format(
                             n.coords, innode.coords))
     
+    def verify_no_crossing_io(self):
+        for n in self.nodes:
+            if n.is_pi:
+                continue
+            if n.gate_type == 'CROSS':
+                if n.is_po:
+                    raise SynthesisException('{} is CROSS so cannot be PO'.format(n.coords))
+                for _, innode in n.fanin.items():
+                    if innode.is_pi:
+                        raise SynthesisException('{} is CROSS so cannot have PI fanin {}'.format(
+                            n.coords, innode.coords))
+
     def to_png(self, filename):
         '''
         Creates a PNG of the logic network using Graphviz.
@@ -612,6 +624,7 @@ class scheme_graph:
         if self.designated_po:
             net.verify_designated_po()
         net.verify_consecutive_not()
+        net.verify_no_crossing_io()
         sim_tts = net.simulate()
         for i in range(len(functions)):
             if functions[i] != sim_tts[i]:
@@ -721,8 +734,7 @@ class scheme_graph:
                 assert(self.nr_pis > 2)
                 enabled_gates.append('MAJ')
             if self.enable_crossings:
-                if ((not n.is_border_node and (len(n.virtual_fanin) == 2)) or
-                   (n.is_border_node and (len(n.io_directions) % 2 == 0))):
+                if not n.is_border_node and (len(n.virtual_fanin) == 2):
                     enabled_gates.append('CROSS')
             n.enabled_gate_types = enabled_gates
             
@@ -896,6 +908,10 @@ class scheme_graph:
                     for svar, fanins in fanin_options.items():
                         inport1, (innode1, outport1) = fanins[0]
                         inport2, (innode2, outport2) = fanins[1]
+                        if innode1.is_pi or innode2.is_pi:
+                            # Crossings cannot have PI fanin.
+                            clauses.append([-gate_var, -svar])
+                            continue
                         if inport1 == OPPOSITE_DIRECTION[inport2]:
                             # We cannot have a crossing with fanins
                             # from opposite directions.

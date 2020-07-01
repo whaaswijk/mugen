@@ -145,13 +145,12 @@ class synth_tests(unittest.TestCase):
 
     def test_trivial_cross(self):
         '''
-        Creates some simple clock scheme graph toplogies and tries
-        to synthesize an CROSS function.
+        Create a very simple graph for a 1x1 USE grid with 2 PIs.
+        Disable all non-trivial gate types except for CROSS. Try to
+        synthesize a projection function and count the number of
+        solutions. There should be zero, since crosses cannot
+        have PI fanins.
         '''
-        # Create a very simple graph for a 1x1 USE grid with 2 PIs.
-        # Disable all non-trivial gate types except for CROSS. Try to
-        # synthesize an AND function and count the number of
-        # solutions.
         g = scheme_graph(shape=(1,1))
         g.enable_or = False
         g.enable_not = False
@@ -164,7 +163,7 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions):
             g.satisfies_spec(net, functions)
             models_found += 1
-        self.assertEqual(models_found, 8)
+        self.assertEqual(models_found, 0)
 
     def test_maj_synthesis(self):
         '''
