@@ -86,7 +86,7 @@ def get_coords_in_direction(coords, direction):
     elif direction == 'WEST':
         return (coords[0] - 1, coords[1])
     else:
-        raise SynthesisException("Uknown cardinal direction: '{}'".format(direction))
+        raise SynthesisException("Unknown cardinal direction: '{}'".format(direction))
 
 def eval_gate(gate_type, inputs):
     if gate_type == 'EMPTY':
@@ -443,7 +443,7 @@ class logic_network:
                 else:
                     sim_vals[n][out_dir] = sim_vals[n.fanin[OPPOSITE_DIRECTION[out_dir]]][out_dir]
             else:
-                raise SynthesisException("Uknown gate type '{}' in simulation".format(n.gate_type))
+                raise SynthesisException("Unknown gate type '{}' in simulation".format(n.gate_type))
 
     def simulate(self):
         '''
