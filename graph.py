@@ -834,18 +834,24 @@ class scheme_graph:
                                 comb[0][1][0].is_pi or comb[1][1][0].is_pi or comb[2][1][0].is_pi):
                             continue
                         
-                        svar_map[size_option][var_idx] = comb
-                        legend[var_idx] = '{} has fanin {}'.format(n.coords, comb)
-                        svars.append(var_idx)
-#                        print(comb)
-                        for direction, option in comb:
-                            # option[0] is the node, option[1] is the
-                            # output port direction.
-                            option[0].ref_vars.append(var_idx)
-                            option[0].ref_var_direction_map[option[1]].append(var_idx)
-                            option[0].ref_var_map[var_idx] = n
-                            svar_direction_map[direction].append(var_idx)
-                        var_idx += 1
+                        if not self.enable_crossings or size_option == 3:
+                            svar_map[size_option][var_idx] = comb
+                            legend[var_idx] = '{} has fanin {}'.format(n.coords, comb)
+                            svars.append(var_idx)
+    #                        print(comb)
+                            for direction, option in comb:
+                                # option[0] is the node, option[1] is the
+                                # output port direction.
+                                option[0].ref_vars.append(var_idx)
+                                option[0].ref_var_direction_map[option[1]].append(var_idx)
+                                option[0].ref_var_map[var_idx] = n
+                                svar_direction_map[direction].append(var_idx)
+                            var_idx += 1
+                        else:
+                            # If we have crossings, we must create a separate
+                            # selection variable for every possible mapping
+                            # from the input directions to the output
+                            # directions.
             n.svar_map = svar_map
             n.svar_direction_map = svar_direction_map
             n.svars = svars
