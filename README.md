@@ -56,8 +56,8 @@ ${GLUCOSE_ROOT}/parallel to your PATH so that Mugen can find the Glucose binary.
 To support timeouts, Mugen uses
 [wrapt-timeout-decorator](https://pypi.org/project/wrapt-timeout-decorator/). It can be installed using pip:
 
-```
-pip install wrapt_timeout_wrapper
+```sh
+pip install wrapt_timeout_decorator
 ```
 
 ## Graphviz (Optional)
