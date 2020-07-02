@@ -1,4 +1,7 @@
-from graphviz import Digraph
+try:
+	from graphviz import Digraph
+except ModuleNotFoundError:
+	pass
 import itertools
 from math import log2
 from pysat.solvers import Glucose3
@@ -440,7 +443,7 @@ class logic_network:
                 else:
                     sim_vals[n][out_dir] = sim_vals[n.fanin[OPPOSITE_DIRECTION[out_dir]]][out_dir]
             else:
-                raise SynthesisException("Uknown gate type '{}' in simulation".format(gate_type))
+                raise SynthesisException("Uknown gate type '{}' in simulation".format(n.gate_type))
 
     def simulate(self):
         '''

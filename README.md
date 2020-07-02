@@ -43,13 +43,21 @@ is to simply use pip:
 pip install python-sat
 ```
 
+## Glucose::MultiSolvers
+
+Mugen uses Glucose::MultiSolvers to perform parallel synthesis. You can
+download Glucose 4.x [here](https://www.labri.fr/perso/lsimon/glucose/). In
+order for parallel synthesis to work, you must first build the parallel glucose
+solver, which can be found under ${GLUCOSE_ROOT}/parallel. You then have to add
+${GLUCOSE_ROOT}/parallel to your PATH so that Mugen can find the Glucose binary. 
+
 ## wrapt-timeout-decorator 
 
 To support timeouts, Mugen uses
 [wrapt-timeout-decorator](https://pypi.org/project/wrapt-timeout-decorator/). It can be installed using pip:
 
-```
-pip install wrapt_timeout_wrapper
+```sh
+pip install wrapt_timeout_decorator
 ```
 
 ## Graphviz (Optional)
