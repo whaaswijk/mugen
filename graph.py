@@ -506,7 +506,7 @@ class scheme_graph:
         self.designated_po = designated_po
         self.nr_threads = nr_threads
         self.model = None
-        self.timeout = 0
+        self.timeout = timeout
 
     def add_virtual_edge(self, coords1, coords2):
         '''
