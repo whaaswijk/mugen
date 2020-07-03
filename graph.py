@@ -200,14 +200,20 @@ class logic_network:
         for n in self.nodes:
             if n.is_pi:
                 continue
-            r += '<node {}, function={}'.format(n.coords, n.function)
-            if 0 in n.fanin:
-                r += ', fanin[0]={}'.format(n.fanin[0])
-            if 1 in n.fanin:
-                r += ', fanin[1]={}'.format(n.fanin[1])
-            if 2 in n.fanin:
-                r += ', fanin[2]={}'.format(n.fanin[2])
+            r += '<node {}, type={}'.format(n.coords, n.gate_type)
+            if 'NORTH' in n.fanin:
+                r += ', fanin[NORTH]={}'.format(n.fanin['NORTH'])
+            if 'EAST' in n.fanin:
+                r += ', fanin[EAST]={}'.format(n.fanin['EAST'])
+            if 'SOUTH' in n.fanin:
+                r += ', fanin[SOUTH]={}'.format(n.fanin['SOUTH'])
+            if 'WEST' in n.fanin:
+                r += ', fanin[WEST]={}'.format(n.fanin['WEST'])
+            if n.gate_type == 'CROSS':
+                r += ', dir_map={}'.format(n.dir_map)
             r += '>\n'
+        for h in range(self.nr_pos):
+            r += 'PO{}={}\n'.format(h, self.po_map[h])
         return r
 
     def has_border_io(self):
@@ -437,11 +443,13 @@ class logic_network:
             elif n.gate_type == 'MAJ':
                 sim_vals[n][out_dir] = eval_gate('MAJ', invals)
             elif n.gate_type == 'CROSS':
-                # Copy input in opposite direction
-                if n.fanin[OPPOSITE_DIRECTION[out_dir]].is_pi:
-                    sim_vals[n][out_dir] = sim_vals[n.fanin[OPPOSITE_DIRECTION[out_dir]]][None]
-                else:
-                    sim_vals[n][out_dir] = sim_vals[n.fanin[OPPOSITE_DIRECTION[out_dir]]][out_dir]
+                # Copy input to direction described in dir_map
+                for indir, outdir in n.dir_map.items():
+                    if outdir == out_dir:
+                        if n.fanin[indir].is_pi:
+                            sim_vals[n][out_dir] = sim_vals[n.fanin[indir][None]]
+                        else:
+                            sim_vals[n][out_dir] = sim_vals[n.fanin[indir]][OPPOSITE_DIRECTION[indir]]
             else:
                 raise SynthesisException("Unknown gate type '{}' in simulation".format(n.gate_type))
 
@@ -498,6 +506,8 @@ class scheme_graph:
         enable_crossings: Enable wire crossings.
         designated_pi: True iff only WIRES can have PI fanin.
         designated_po: True iff only WIRES can have PO fanout.
+        nr_threads: How many threads to use in parallel solving.
+        timeout: the timeout for the synthesize call (in seconds)
         '''
         self.shape = shape
         self.node_map = {}
@@ -796,6 +806,8 @@ class scheme_graph:
             if n.is_pi:
                 continue
             svar_map = {}
+            # dir_map tracks to which output direction an fanin gets mapped.
+            dir_map = {}
             # Track all selection variables for a given fanin
             # direction.
             svar_direction_map = {} 
@@ -837,7 +849,7 @@ class scheme_graph:
                                 comb[0][1][0].is_pi or comb[1][1][0].is_pi or comb[2][1][0].is_pi):
                             continue
                         
-                        if not self.enable_crossings or size_option == 3:
+                        if not self.enable_crossings or size_option != 2:
                             svar_map[size_option][var_idx] = comb
                             legend[var_idx] = '{} has fanin {}'.format(n.coords, comb)
                             svars.append(var_idx)
@@ -855,7 +867,24 @@ class scheme_graph:
                             # selection variable for every possible mapping
                             # from the input directions to the output
                             # directions.
+                            input_directions = set([comb[0][0], comb[1][0]])
+                            output_directions = list(CARDINAL_DIRECTIONS.difference(input_directions))
+                            for i in range(2):
+                                svar_map[size_option][var_idx] = comb
+                                dir_map[var_idx] = { comb[0][0] : output_directions[i], comb[1][0] : output_directions[1 - i] }
+                                legend[var_idx] = '{} has fanin {}'.format(n.coords, comb)
+                                svars.append(var_idx)
+                                for direction, option in comb:
+                                    # option[0] is the node, option[1] is the
+                                    # output port direction.
+                                    option[0].ref_vars.append(var_idx)
+                                    option[0].ref_var_direction_map[option[1]].append(var_idx)
+                                    option[0].ref_var_map[var_idx] = n
+                                    svar_direction_map[direction].append(var_idx)
+                                var_idx += 1
+                            
             n.svar_map = svar_map
+            n.dir_map = dir_map
             n.svar_direction_map = svar_direction_map
             n.svars = svars
 
@@ -917,71 +946,43 @@ class scheme_graph:
                     for svar, fanins in fanin_options.items():
                         inport1, (innode1, outport1) = fanins[0]
                         inport2, (innode2, outport2) = fanins[1]
+                        assert(inport1 == OPPOSITE_DIRECTION[outport1])
+                        assert(inport2 == OPPOSITE_DIRECTION[outport2])
                         if innode1.is_pi or innode2.is_pi:
                             # Crossings cannot have PI fanin.
                             clauses.append([-gate_var, -svar])
                             continue
-                        if inport1 == OPPOSITE_DIRECTION[inport2]:
-                            # We cannot have a crossing with fanins
-                            # from opposite directions.
-                            clauses.append([-gate_var, -svar])
-                            continue
-                        if (OPPOSITE_DIRECTION[inport1] not in n.sim_vars.keys() or
-                            OPPOSITE_DIRECTION[inport2] not in n.sim_vars.keys()):
-                            # If a crossing input is coming into a
-                            # node from direction d, then the opposite
-                            # direction d' must be a possible output
-                            # direction for this node.
-                            clauses.append([-gate_var, -svar])
-                            continue
-                        out_directions = set()
+                        out_directions = n.dir_map[svar]
+                        assert(out_directions[inport1] in n.sim_vars.keys())
+                        assert(out_directions[inport2] in n.sim_vars.keys())
                         for tt_idx in range(nr_local_sim_vars):
                             permutations = list(itertools.product('01', repeat=2))
                             for permutation in permutations:
                                 clause1 = [0] * 5
                                 clause2 = [0] * 5
-                                const_vals = []
-                                for i in range(2):
-                                    const_val = int(permutation[i])
-                                    const_vals.append(const_val)
+                                const_vals = [int(permutation[0]), int(permutation[1])]
                                 clause1[0] = -svar
                                 clause1[1] = -gate_var
                                 clause2[0] = -svar
                                 clause2[1] = -gate_var
                                 for i in range(2):
-                                    _, (innode, output_port) = fanins[i]
                                     if const_vals[i] == 1:
-                                        clause1[i+2] = -innode.sim_vars[output_port][tt_idx]
-                                        clause2[i+2] = -innode.sim_vars[output_port][tt_idx]
+                                        clause1[i+2] = -innode1.sim_vars[outport1][tt_idx]
+                                        clause2[i+2] = -innode2.sim_vars[outport2][tt_idx]
                                     else:
-                                        clause1[i+2] = innode.sim_vars[output_port][tt_idx]
-                                        clause2[i+2] = innode.sim_vars[output_port][tt_idx]
-
+                                        clause1[i+2] = innode1.sim_vars[outport1][tt_idx]
+                                        clause2[i+2] = innode2.sim_vars[outport2][tt_idx]
                                 if const_vals[0] == 1:
-                                    clause1[4] = n.sim_vars[OPPOSITE_DIRECTION[inport1]][tt_idx]
+                                    clause1[4] = n.sim_vars[out_directions[inport1]][tt_idx]
                                 else:
-                                    clause1[4] = -n.sim_vars[OPPOSITE_DIRECTION[inport1]][tt_idx]
+                                    clause1[4] = -n.sim_vars[out_directions[inport1]][tt_idx]
                                 if const_vals[1] == 1:
-                                    clause2[4] = n.sim_vars[OPPOSITE_DIRECTION[inport2]][tt_idx]
+                                    clause2[4] = n.sim_vars[out_directions[inport2]][tt_idx]
                                 else:
-                                    clause2[4] = -n.sim_vars[OPPOSITE_DIRECTION[inport2]][tt_idx]
-
-                                out_directions.add(OPPOSITE_DIRECTION[inport1])
-                                out_directions.add(OPPOSITE_DIRECTION[inport2])
+                                    clause2[4] = -n.sim_vars[out_directions[inport2]][tt_idx]
                                     
                                 clauses.append(clause1)
                                 clauses.append(clause2)
-                        # It is possible that a tile supports wire
-                        # crossings in multiple directions. If that's
-                        # the case, we want to force unused crossing
-                        # outputs to zero since that improves symmetry
-                        # breaking.
-                        unused_directions = n.io_directions.difference(out_directions)
-                        if len(unused_directions) > 0:
-                            for d in unused_directions:
-                                for tt_idx in range(nr_local_sim_vars):
-                                    sim_var = n.sim_vars[d][tt_idx]
-                                    clauses.append([-svar, -gate_var, -sim_var])
                 else:
                     fanin_size = GATE_FANIN_RANGE[gate_type]
                     gate_var = n.gate_type_map[gate_type]
@@ -1351,6 +1352,8 @@ class scheme_graph:
                                 netnode.set_fanin(in_dir, net.nodes[innode.coords], out_dir)
                             else:
                                 netnode.set_fanin(in_dir, net.node_map[innode.coords], out_dir)
+                        if netnode.gate_type == 'CROSS':
+                            netnode.dir_map = n.dir_map[svar]
             assert(nr_selected_svars <= 1) # may be zero if EMPTY
         return net
 

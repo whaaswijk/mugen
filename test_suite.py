@@ -116,7 +116,7 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions):
             g.satisfies_spec(net, functions)
             models_found += 1
-        self.assertEqual(models_found, 24)
+        self.assertEqual(models_found, 48)
 
         # Do the same thing but now say there are 3 PIs. The number of
         # models shouldn't change.
@@ -129,7 +129,7 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions):
             g.satisfies_spec(net, functions)
             models_found += 1
-        self.assertEqual(models_found, 24)
+        self.assertEqual(models_found, 48)
 
         # Again do the same thing but now allow all gate types. Again,
         # the number of solutions shouldn't change, because MAJ and OR
@@ -140,7 +140,7 @@ class synth_tests(unittest.TestCase):
         for net in g.synthesize(functions):
             g.satisfies_spec(net, functions)
             models_found += 1
-        self.assertEqual(models_found, 24)
+        self.assertEqual(models_found, 48)
 
 
     def test_trivial_cross(self):
@@ -742,6 +742,34 @@ class synth_tests(unittest.TestCase):
             for net in g.synthesize(functions): #, verbosity=2):
                 pass
 
+    def test_non_perpendicular_crossings(self):
+        '''
+        Creates a simple clocking scheme to test if crossings work in multiple
+        directions (i.e. not just perpendicular).
+        '''
+        g = scheme_graph(shape=(3,3))
+        g.designated_pi = True
+        g.designated_po = True
+        g.enable_maj = False
+        g.add_virtual_edge((0,1), (1,1))
+        g.add_virtual_edge((2,1), (1,1))
+        g.add_virtual_edge((1,1), (1,0))
+        g.add_virtual_edge((1,1), (1,2))
+        functions = [[0,0,1,1,],[0,1,0,1]]
+        models_found = 0
+        for net in g.synthesize(functions):
+            g.satisfies_spec(net, functions)
+            has_crossing = False
+            for n in net.nodes:
+                if n.gate_type == 'CROSS':
+                    has_crossing = True
+            if has_crossing:
+                models_found += 1
+#                net.to_png('test{}'.format(models_found))
+#                print(net)
+                if models_found > 100:
+                    break
+        self.assertTrue(models_found > 0)
 
 if __name__ == '__main__':
     unittest.main()
