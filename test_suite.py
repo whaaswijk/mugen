@@ -248,10 +248,9 @@ class synth_tests(unittest.TestCase):
         g.add_virtual_edge((2, 2), (2, 1))
         functions = [[0,0,0,1,0,1,1,1]]
         models_found = 0
-        cycles = g.find_cycles()
         for net in g.synthesize(functions):
             models_found += 1
-            break;
+            break
         self.assertEqual(models_found, 0)
 
         '''
