@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.abspath('..'))
 project = 'Mugen'
 copyright = '2020, Winston Haaswijk'
 author = 'Winston Haaswijk'
-
+master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------
 
