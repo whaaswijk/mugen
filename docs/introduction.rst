@@ -20,5 +20,9 @@ More advanced features include:
 - Toggling border I/O.
 
 Mugen has been tested under Linux and should generally work on Unix systems.
-Windows is not officially supported, although much of the functionality may
-still work.
+Unfortunately Windows is currently not supported.
+
+Getting Started
+---------------
+
+To get started, see the :ref:`installation instructions<installation-label>`. Next, you can check out some :ref:`examples<examples-label>`. Finally, you can find the Mugen API reference :ref:`here<reference-label>`.

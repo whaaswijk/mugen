@@ -13,9 +13,7 @@ Welcome to Mugen's documentation!
    introduction
    installation
    examples
-
    modules
-
 
 Indices and tables
 ==================

@@ -13,8 +13,15 @@ import tempfile
 import wrapt_timeout_decorator
 
 class SynthesisException(Exception):
+    '''
+    Mugen's generic exception class that is thrown whenever something
+    unexpected happens during synthesis.
+    '''
 
     def __init__(self, message):
+        '''
+        :param message: The message to show when the exception is thrown.
+        '''
         self.message = message
 
 CARDINAL_DIRECTIONS = set(['NORTH', 'EAST', 'SOUTH', 'WEST'])
@@ -39,15 +46,35 @@ GATE_FANIN_RANGE = {
 
 # Some utility functions.
 def is_north(coords1, coords2):
+    '''
+    Returns true if and only if coords1 lies to the north of coords2.  We say
+    this is the case if they have the same horizontal position but coords1 has
+    a lower vertical position.
+    '''
     return coords1[0] == coords2[0] and coords1[1] < coords2[1]
 
 def is_east(coords1, coords2):
+    '''
+    Returns true if and only if coords1 lies to the east of coords2.  We say
+    this is the case if they have the same vertical position but coords1 has a
+    higher horizontal position.
+    '''
     return coords1[0] > coords2[0] and coords1[1] == coords2[1]
 
 def is_south(coords1, coords2):
+    '''
+    Returns true if and only if coords1 lies to the south of coords2.  We say
+    this is the case if they have the same horizontal position but coords1 has
+    a higher vertical position.
+    '''
     return coords1[0] == coords2[0] and coords1[1] > coords2[1]
 
 def is_west(coords1, coords2):
+    '''
+    Returns true if and only if coords1 lies to the west of coords2.  We say
+    this is the case if they have the same vertical position but coords1 has
+    a lower horizontal position.
+    '''
     return coords1[0] < coords2[0] and coords1[1] == coords2[1]
 
 def get_direction(coords1, coords2):
@@ -89,6 +116,13 @@ def get_coords_in_direction(coords, direction):
         raise SynthesisException("Unknown cardinal direction: '{}'".format(direction))
 
 def eval_gate(gate_type, inputs):
+    '''
+    Evaluates a certain gate type on a list of binary input values. Returns the
+    result.
+
+    :param gate_type: The type of gate to evaluate. Choices are EMPTY, WIRE, NOT, AND, OR, and MAJ.
+    :param inputs: List of input values.
+    '''
     if gate_type == 'EMPTY':
         return 0
     elif gate_type == 'WIRE':
@@ -108,8 +142,26 @@ class node:
     '''
     A generic node class, used by both clocking scheme graphs
     and logic networks.
+
+    :ivar coords: The grid coordinates of the node in the clocking scheme.
+    :ivar is_pi: Is the node a primary input.
+    :ivar is_po: Is the node a primary output.
+    :ivar fanin: A list of nodes containing the fanin of the current node.
+    :ivar fanout: A list of nodes containing the fanin of the current node.
+    :ivar is_border_node: This Boolean flag is True iff the node lies on the border of the clocking scheme.
+    :ivar gate_type: The gate type of the node.
+    :ivar dir_map: This optional attribute is set only for nodes with gate_type CROSS. It is a dictionary which maps fanin directions to output directions. For example, if dir_map = { 'WEST': 'NORTH', 'EAST': 'SOUTH'}, then the western fanin is mapped to the northern fanout port and the eastern fanin is mapped to the southern fanout port.
     '''
+
     def __init__(self, *, coords=None, is_pi=False, is_po=False):
+        '''
+        Creates a new logic node.
+
+        :param coords: the grid coordinates of the node in the clocking scheme.
+        :param is_pi: is the node a primary input.
+        :param is_po: is the node a primary output.
+
+        '''
         self.coords = coords
         self.is_pi = is_pi
         self.virtual_fanin = []
@@ -144,31 +196,27 @@ class logic_network:
     to a clocking scheme graph. A major difference is that it cannot
     contain cycles. However, it can also be accessed using the same
     tile coordinate based API.
+
+    :ivar shape: a 2-tuple containing the size of the grid
+           (width x height).
+    :ivar nr_pis: number of PIs.
+    :ivar nr_pos: number of POs.
+    :ivar nodes: A list of all the nodes in the logic network, including the PIs.
+    :ivar node_map: A map from tile coordinates to nodes nodes in the logic network. E.g. to access the node corresponding to tile (0,0) one refers to node_map[(0,0)].
+    :ivar po_map: A list of size nr_pos mapping output indices to nodes in the network. E.g.  to access the first output, one refers to po_map[0].
     '''
     
     def __init__(self, shape, nr_pis, nr_pos):
         '''
-        Creates a new logic network according to the following
-        specifications:
+        Creates a new logic network.
 
-        shape: a 2-tuple containing the size of the grid
-               (width x height)
-        nr_pis: number of PIs
-        nr_pos: number of POs
-
-        Furthermore, it has the following properties:
-        self.nodes: A list of all the nodes in the logic 
-                    network, including the PIs.
-        self.node_map: A map from tile coordinates to nodes
-                       nodes in the logic network. E.g. to
-                       access the node corresponding to
-                       tile (0,0) one refers to 
-                       node_map[(0,0)].
-        self.po_map: A list of size nr_pos mapping output
-                     indices to nodes in the network. E.g.
-                     to access the first output, one refers
-                     to po_map[0].
+        :param shape: a 2-tuple containing the size of the grid
+               (width x height).
+        :param nr_pis: number of PIs.
+        :param nr_pos: number of POs.
         '''
+
+
         self.shape = shape
         self.nr_pis = nr_pis
         self.nr_pos = nr_pos
@@ -255,8 +303,8 @@ class logic_network:
 
     def verify_designated_pi(self):
         '''
-        The same as has_designated_pi but raises a SynthesisException if
-        the spec is not met.
+        The same as :func:`has_designated_pi` but raises a
+        :class:`SynthesisException` if the spec is not met.
         '''
         for n in self.nodes:
             if n.is_pi:
@@ -287,8 +335,8 @@ class logic_network:
 
     def verify_designated_po(self):
         '''
-        The same as has designated_po but raises a SynthesisException if
-        the spec is not met.
+        The same as :func:`has_designated_po` but raises a
+        :class:`SynthesisException` if the spec is not met.
         '''
         for (n, d) in self.po_map:
             if n.gate_type != 'WIRE':
@@ -299,6 +347,10 @@ class logic_network:
                     n.coords))
 
     def verify_consecutive_not(self):
+        ''' 
+        Verifies that the network contains no consecutive NOT gates. Raises a
+        :class:`SynthesisException` if it does.
+        '''
         for n in self.nodes:
             if n.is_pi:
                 continue
@@ -309,6 +361,10 @@ class logic_network:
                             n.coords, innode.coords))
     
     def verify_no_crossing_io(self):
+        '''
+        Verifies that the network contains no crossings that are directly
+        connected to I/O pins. Raises a :class:`SynthesisException` if it does.
+        '''
         for n in self.nodes:
             if n.is_pi:
                 continue
@@ -413,6 +469,9 @@ class logic_network:
         dot.render(filename=filename, format='png', cleanup=True)
 
     def rec_simulate(self, n, sim_vals, marked_nodes):
+        '''
+        Recursive helper method for :func:`simulate`.
+        '''
         if n.is_pi:
             return
         for innode in n.fanin.values():
@@ -494,20 +553,20 @@ class scheme_graph:
                  designated_pi=False, designated_po=False, nr_threads=1,
                  timeout=0):
         '''
-        Creates a new clocking scheme graph according to specifications.
-        Defines the following properties.
+        Creates a new clocking scheme graph.
 
-        shape: A 2-tuple specifying the dimensions of the clocking scheme.
-        enable_not: Enable synthesis of WIREs.
-        enable_not: Enable synthesis of NOT gates.
-        enable_and: Enable synthesis of AND gates.
-        enable_or: Enable synthesis of OR gates.
-        enable_maj: Enable synthesis of MAJ gates.
-        enable_crossings: Enable wire crossings.
-        designated_pi: True iff only WIRES can have PI fanin.
-        designated_po: True iff only WIRES can have PO fanout.
-        nr_threads: How many threads to use in parallel solving.
-        timeout: the timeout for the synthesize call (in seconds)
+        :param shape: A 2-tuple specifying the dimensions of the clocking scheme.
+        :param enable_not: Enable synthesis of WIREs.
+        :param enable_not: Enable synthesis of NOT gates.
+        :param enable_and: Enable synthesis of AND gates.
+        :param enable_or: Enable synthesis of OR gates.
+        :param enable_maj: Enable synthesis of MAJ gates.
+        :param enable_crossings: Enable wire crossings.
+        :param designated_pi: True iff only WIRES can have PI fanin.
+        :param designated_po: True iff only WIRES can have PO fanout.
+        :param nr_threads: How many threads to use in parallel solving.
+        :param timeout: the timeout for the synthesize call (in seconds)
+
         '''
         self.shape = shape
         self.node_map = {}
@@ -544,13 +603,13 @@ class scheme_graph:
         node1.virtual_fanout.append(node2)
         node2.virtual_fanin.append(node1)
 
-    def dfs_find_cycles(self, cycles, start, n, path):
+    def _dfs_find_cycles(self, cycles, start, n, path):
         if n in path:
             if n == start:
                 cycles.append([n] + path)
             return
         for innode in n.virtual_fanin:
-            self.dfs_find_cycles(cycles, start, innode, [n] + path)
+            self._dfs_find_cycles(cycles, start, innode, [n] + path)
 
     def find_cycles(self):
         '''
@@ -560,7 +619,7 @@ class scheme_graph:
         cycles = []
         for n in self.node_map.values():
             for innode in n.virtual_fanin:
-                self.dfs_find_cycles(cycles, n, innode, [n])
+                self._dfs_find_cycles(cycles, n, innode, [n])
         return cycles
 
     def to_png(self, filename):
@@ -597,8 +656,9 @@ class scheme_graph:
 
     def satisfies_spec(self, net, functions):
         '''
-        Verifies that a network satisfies the specifications represented
-        by this scheme_graph object.
+        Verifies that a network satisfies the specifications represented by
+        this scheme_graph object. Raises a :class:`SynthesisException` if this
+        is not the case.
         '''
         # Make sure PIs do not have more than one fanout.
         for n in net.nodes:
@@ -644,7 +704,7 @@ class scheme_graph:
                 raise SynthesisException('Specified f[{}] = {}, net out[{}] = {}'.format(
                     i, functions[i], i, sim_tts[i]))
 
-    def discover_connectivity(self, n, pi_fanin_options):
+    def _discover_connectivity(self, n, pi_fanin_options):
         # Check which directions support fanouts.
         fanout_directions = set()
         for outnode in n.virtual_fanout:
@@ -681,6 +741,16 @@ class scheme_graph:
         n.io_directions = io_directions
 
     def synthesize(self, functions, verbosity=0):
+        ''' 
+        Synthesizes the given list of functions. Returns an iterator of
+        :class:`logic_network` objects, so the caller may iterate on this
+        method to synthesize all networks that satisfy the specifications given
+        by the clocking scheme and the functions. 
+
+        :param functions: A list of lists of binary integers. Every list is a function to be synthesized. Every list is to be computed by the resulting logic network and corresponds to one of its outputs. The n-th list corresponds to the n-th logic network output.
+        :param verbosity: Parameter to view debugging output.
+        '''
+
         @wrapt_timeout_decorator.timeout(self.timeout)
         def timeout_call(self, functions, verbosity):
             for net in self._synthesize(functions, verbosity):
@@ -728,7 +798,7 @@ class scheme_graph:
         for n in self.nodes:
             if n.is_pi:
                 continue
-            self.discover_connectivity(n, pi_fanin_options)
+            self._discover_connectivity(n, pi_fanin_options)
 
         # Determine what gate types are supported by each tile node.
         for n in self.nodes:
@@ -1297,6 +1367,10 @@ class scheme_graph:
                     raise SynthesisException('Error calling Glucose::MultiSolvers')
 
     def model_to_network(self, model, nr_outputs, out_vars, nr_local_sim_vars, verbosity):
+        '''
+        Decodes a SAT model (i.e. a list of integer values) and creates a
+        :class:`logic_network` from it.  
+        '''
         net = logic_network(self.shape, self.nr_pis, self.nr_pos)
         for h in range(nr_outputs):
             houtvars = out_vars[h]
